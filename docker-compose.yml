@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Capa de Datos (PostgreSQL)
+  db:
+    image: postgres:15
+    container_name: escom_db
+    environment:
+      POSTGRES_USER: escom_user
+      POSTGRES_PASSWORD: escom_password
+      POSTGRES_DB: hardware_match_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Capa de Lógica de Negocio (FastAPI)
+  backend:
+    build: ./backend
+    container_name: escom_backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://escom_user:escom_password@db:5432/hardware_match_db
+    volumes:
+      - ./backend:/app
+
+  # Capa de Presentación (React con Vite)
+  frontend:
+    build: ./frontend
+    container_name: escom_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
