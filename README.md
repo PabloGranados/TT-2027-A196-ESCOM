@@ -30,3 +30,27 @@ El Sprint 1 contempla la configuración del entorno base de desarrollo. Para lev
    ```bash
    git clone [https://github.com/PabloGranados/TT-2027-A196-ESCOM](https://github.com/PabloGranados/TT-2027-A196-ESCOM)
    cd TT-2027-A196-ESCOM
+
+### Autenticación inicial
+
+El backend expone un flujo de registro y sesión con PostgreSQL. Las sesiones se
+guardan en la tabla `sessions` y el navegador recibe únicamente una cookie
+`HttpOnly`; las contraseñas se almacenan con hash `scrypt`.
+
+Endpoints:
+
+* `POST /auth/register`: crea una cuenta y abre su sesión.
+* `POST /auth/login`: inicia sesión con correo y contraseña.
+* `GET /auth/me`: devuelve el usuario autenticado para restaurar la sesión.
+* `POST /auth/logout`: invalida la sesión actual.
+
+Variables del backend:
+
+* `DATABASE_URL`: conexión PostgreSQL.
+* `FRONTEND_ORIGIN`: origen permitido por CORS, por defecto `http://localhost:5173`.
+* `SESSION_TTL_SECONDS`: duración de la sesión, por defecto 3600 segundos.
+* `COOKIE_SECURE`: usa `Secure` en la cookie; debe ser `true` detrás de HTTPS.
+
+`VITE_API_URL` configura la URL pública del backend para el frontend. En Docker
+Compose local se configura como `http://localhost:8000`. No se almacenan tokens
+de sesión en `localStorage`.
