@@ -33,6 +33,31 @@ const PREDEFINED_INTERESTS = [
   'Ofimática y Estudio',
 ]
 
+const EMPTY_FILTERS = {
+  search: '',
+  device_type: '',
+  sort_by: 'recientes',
+  brand: '',
+  condition: '',
+  min_ram: '',
+  min_storage: '',
+  storage_type: '',
+  gpu_type: '',
+  min_price: '',
+  max_price: '',
+  ipn_sellers_only: false,
+  only_compatible: false,
+}
+
+function buildPublicationsUrl(filters) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === '' || value === false || value === null) return
+    params.set(key, typeof value === 'string' ? value.trim() : value)
+  })
+  return `/api/publications?${params.toString()}`
+}
+
 async function apiRequest(path, options = {}) {
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -1214,11 +1239,9 @@ function App() {
   const [selectedPub, setSelectedPub] = useState(null)
 
   // Filtros
-  const [filterSearch, setFilterSearch] = useState('')
-  const [filterType, setFilterType] = useState('Todos')
-  const [filterCondition, setFilterCondition] = useState('Todas')
-  const [filterMaxPrice, setFilterMaxPrice] = useState(30000)
-  const [onlyCompatible, setOnlyCompatible] = useState(false)
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [filterOptions, setFilterOptions] = useState({ brands: [] })
 
   useEffect(() => {
     let ignore = false
@@ -1237,15 +1260,9 @@ function App() {
     }
   }, [])
 
-  const fetchPublications = (compatFilter = onlyCompatible) => {
+  const fetchPublications = (current = filters) => {
     setLoadingPubs(true)
-    let url = `/api/publications?only_compatible=${compatFilter}`
-    if (filterType !== 'Todos') url += `&device_type=${filterType}`
-    if (filterCondition !== 'Todas') url += `&condition=${filterCondition}`
-    if (filterMaxPrice) url += `&max_price=${filterMaxPrice}`
-    if (filterSearch.trim()) url += `&search=${encodeURIComponent(filterSearch.trim())}`
-
-    apiRequest(url)
+    apiRequest(buildPublicationsUrl(current))
       .then((data) => setPublications(data))
       .catch((err) => alert(err.message))
       .finally(() => setLoadingPubs(false))
@@ -1254,13 +1271,7 @@ function App() {
   useEffect(() => {
     if (!user) return
     let ignore = false
-    let url = `/api/publications?only_compatible=${onlyCompatible}`
-    if (filterType !== 'Todos') url += `&device_type=${filterType}`
-    if (filterCondition !== 'Todas') url += `&condition=${filterCondition}`
-    if (filterMaxPrice) url += `&max_price=${filterMaxPrice}`
-    if (filterSearch.trim()) url += `&search=${encodeURIComponent(filterSearch.trim())}`
-
-    apiRequest(url)
+    apiRequest(buildPublicationsUrl(filters))
       .then((data) => {
         if (!ignore) setPublications(data)
       })
@@ -1268,24 +1279,29 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [user, filterType, filterCondition, filterMaxPrice, filterSearch, onlyCompatible])
+  }, [user, filters])
 
-  const resetFilters = () => {
-    setFilterSearch('')
-    setFilterType('Todos')
-    setFilterCondition('Todas')
-    setFilterMaxPrice(30000)
-    setOnlyCompatible(false)
-  }
+  useEffect(() => {
+    if (!user) return
+    apiRequest('/api/filters/options')
+      .then((data) => setFilterOptions(data))
+      .catch(() => {})
+  }, [user, publications.length])
+
+  const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
+
+  const activeFilterCount = Object.keys(EMPTY_FILTERS).filter(
+    (key) => key !== 'search' && key !== 'sort_by' && key !== 'device_type' && filters[key] !== EMPTY_FILTERS[key]
+  ).length
+
+  const resetFilters = () => setFilters(EMPTY_FILTERS)
 
   const toggleCompatibility = () => {
-    if (!onlyCompatible && user && !user.has_complete_profile) {
+    if (!filters.only_compatible && user && !user.has_complete_profile) {
       alert('Completa tu carrera y semestre en "Mi perfil" antes de activar este filtro.')
       return
     }
-    const nextVal = !onlyCompatible
-    setOnlyCompatible(nextVal)
-    fetchPublications(nextVal)
+    setFilter('only_compatible', !filters.only_compatible)
   }
 
   const logout = async () => {
@@ -1349,7 +1365,7 @@ function App() {
       <AuthScreen
         onAuthenticated={(u) => {
           setUser(u)
-          fetchPublications(false)
+          fetchPublications(EMPTY_FILTERS)
         }}
       />
     )
@@ -1433,10 +1449,10 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    className={`secondary ${onlyCompatible ? 'active-filter' : ''}`}
+                    className={`secondary ${filters.only_compatible ? 'active-filter' : ''}`}
                     onClick={toggleCompatibility}
                   >
-                    {onlyCompatible
+                    {filters.only_compatible
                       ? 'Mostrando: Solo compatibles'
                       : 'Filtrar por compatibilidad de carrera'}
                   </button>
@@ -1457,48 +1473,145 @@ function App() {
                   <input
                     type="search"
                     placeholder="Buscar por marca, modelo o procesador…"
-                    value={filterSearch}
-                    onChange={(e) => setFilterSearch(e.target.value)}
+                    value={filters.search}
+                    onChange={(e) => setFilter('search', e.target.value)}
                   />
                 </div>
 
                 <div className="filter-group">
-                  <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                    <option value="Todos">Todos los tipos</option>
+                  <select value={filters.device_type} onChange={(e) => setFilter('device_type', e.target.value)}>
+                    <option value="">Todos los tipos</option>
                     <option value="Laptop">Laptops</option>
                     <option value="Tableta">Tabletas</option>
                   </select>
                 </div>
 
                 <div className="filter-group">
-                  <select
-                    value={filterCondition}
-                    onChange={(e) => setFilterCondition(e.target.value)}
-                  >
-                    <option value="Todas">Cualquier condición</option>
-                    <option value="Nuevo">Nuevo</option>
-                    <option value="Usado - Como nuevo">Como nuevo</option>
-                    <option value="Usado - Buen estado">Buen estado</option>
-                    <option value="Usado - Con detalles">Con detalles</option>
+                  <select value={filters.sort_by} onChange={(e) => setFilter('sort_by', e.target.value)}>
+                    <option value="recientes">Más recientes</option>
+                    <option value="precio_asc">Precio: menor a mayor</option>
+                    <option value="precio_desc">Precio: mayor a menor</option>
+                    <option value="compatibilidad">Mayor compatibilidad</option>
                   </select>
                 </div>
 
-                <div className="filter-group price-filter">
-                  <span className="price-legend">Hasta ${filterMaxPrice.toLocaleString()} MXN</span>
-                  <input
-                    type="range"
-                    min="5000"
-                    max="40000"
-                    step="1000"
-                    value={filterMaxPrice}
-                    onChange={(e) => setFilterMaxPrice(Number(e.target.value))}
-                  />
-                </div>
-
-                <button type="button" className="link-clear-btn" onClick={resetFilters}>
-                  Limpiar
+                <button
+                  type="button"
+                  className={`secondary-sm ${showAdvanced ? 'active-filter' : ''}`}
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                >
+                  Más filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                 </button>
+
+                {activeFilterCount > 0 && (
+                  <button type="button" className="link-clear-btn" onClick={resetFilters}>
+                    Limpiar
+                  </button>
+                )}
               </div>
+
+              {showAdvanced && (
+                <div className="advanced-filters">
+                  <label>
+                    Marca
+                    <select value={filters.brand} onChange={(e) => setFilter('brand', e.target.value)}>
+                      <option value="">Todas</option>
+                      {filterOptions.brands.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Condición
+                    <select value={filters.condition} onChange={(e) => setFilter('condition', e.target.value)}>
+                      <option value="">Cualquiera</option>
+                      <option value="Nuevo">Nuevo</option>
+                      <option value="Usado - Como nuevo">Como nuevo</option>
+                      <option value="Usado - Buen estado">Buen estado</option>
+                      <option value="Usado - Con detalles">Con detalles</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    RAM mínima
+                    <select value={filters.min_ram} onChange={(e) => setFilter('min_ram', e.target.value)}>
+                      <option value="">Cualquiera</option>
+                      {[4, 8, 12, 16, 24, 32].map((r) => (
+                        <option key={r} value={r}>
+                          {r} GB o más
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Almacenamiento mínimo
+                    <select value={filters.min_storage} onChange={(e) => setFilter('min_storage', e.target.value)}>
+                      <option value="">Cualquiera</option>
+                      <option value="128">128 GB o más</option>
+                      <option value="256">256 GB o más</option>
+                      <option value="512">512 GB o más</option>
+                      <option value="1024">1 TB o más</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Tipo de disco
+                    <select value={filters.storage_type} onChange={(e) => setFilter('storage_type', e.target.value)}>
+                      <option value="">Cualquiera</option>
+                      <option value="SSD NVMe">SSD NVMe</option>
+                      <option value="SSD SATA">SSD SATA</option>
+                      <option value="HDD">HDD</option>
+                      <option value="eMMC">eMMC</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Tarjeta gráfica
+                    <select value={filters.gpu_type} onChange={(e) => setFilter('gpu_type', e.target.value)}>
+                      <option value="">Cualquiera</option>
+                      <option value="dedicada">Dedicada</option>
+                      <option value="integrada">Integrada</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Precio mínimo (MXN)
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      placeholder="0"
+                      value={filters.min_price}
+                      onChange={(e) => setFilter('min_price', e.target.value)}
+                    />
+                  </label>
+
+                  <label>
+                    Precio máximo (MXN)
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      placeholder="Sin límite"
+                      value={filters.max_price}
+                      onChange={(e) => setFilter('max_price', e.target.value)}
+                    />
+                  </label>
+
+                  <label className="check-label">
+                    <input
+                      type="checkbox"
+                      checked={filters.ipn_sellers_only}
+                      onChange={(e) => setFilter('ipn_sellers_only', e.target.checked)}
+                    />
+                    Solo vendedores con correo IPN
+                  </label>
+                </div>
+              )}
             </section>
 
             {/* CATÁLOGO DE PUBLICACIONES */}
@@ -1506,7 +1619,7 @@ function App() {
               <div className="catalog-header">
                 <h3>
                   {publications.length} {publications.length === 1 ? 'oferta' : 'ofertas'} disponibles
-                  {onlyCompatible && ' · Compatibilidad con tu carrera'}
+                  {filters.only_compatible && ' · Compatibilidad con tu carrera'}
                 </h3>
                 {loadingPubs && <span className="updating-tag">Actualizando…</span>}
               </div>

@@ -1441,3 +1441,33 @@ label textarea:focus {
     font-size: 1.4rem;
   }
 }
+
+/* Filtros avanzados */
+.advanced-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.advanced-filters label {
+  font-size: 0.8rem;
+}
+
+.advanced-filters label.check-label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  align-self: end;
+  padding-bottom: 8px;
+  color: var(--text-main);
+}
+
+.advanced-filters label.check-label input {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: var(--ipn-guinda-light);
+}
