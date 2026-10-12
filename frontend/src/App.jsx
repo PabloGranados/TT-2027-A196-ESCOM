@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Cuenta de demostración opcional (solo desarrollo): se define en el archivo .env
+const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL || ''
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || ''
 
 const CAREERS = [
   'Ingeniería en Sistemas Computacionales',
@@ -114,8 +117,8 @@ function AuthScreen({ onAuthenticated }) {
   const fillDemo = () => {
     setForm((prev) => ({
       ...prev,
-      email: 'demo.escom@ipn.mx',
-      password: 'Escom2027*',
+      email: DEMO_EMAIL,
+      password: DEMO_PASSWORD,
     }))
   }
 
@@ -216,11 +219,11 @@ function AuthScreen({ onAuthenticated }) {
           </p>
         </header>
 
-        {mode === 'login' && (
+        {mode === 'login' && DEMO_EMAIL && DEMO_PASSWORD && (
           <div className="demo-box">
             <div className="demo-info">
               <span className="demo-tag">Cuenta de prueba</span>
-              <p className="demo-text">demo.escom@ipn.mx · Escom2027*</p>
+              <p className="demo-text">{DEMO_EMAIL}</p>
             </div>
             <button type="button" className="ghost-btn-sm" onClick={fillDemo}>
               Autocompletar

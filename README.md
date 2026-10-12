@@ -1,56 +1,140 @@
-# TT 2027-A196: Prototipo de aplicación web para la recomendación de publicaciones de ofertas de laptops y tabletas entre la comunidad de la ESCOM
+# TT 2027-A196 · ESCOM Hardware Match
 
-## Equipo de Desarrollo
-* **Alumnos:**
-  * Granados Martínez Pablo Daniel
-  * López Hernández Alan
-* **Directora:** M. en C. Galiñanes Rodríguez María Gabriela
+**Prototipo de aplicación web para la recomendación de publicaciones de oferta de laptops y tabletas entre la comunidad de la ESCOM**
 
-## Descripción del Proyecto
-Este proyecto es un Trabajo Terminal desarrollado para la Escuela Superior de Cómputo (ESCOM) del IPN. Su objetivo principal es implementar una aplicación web que centralice la publicación de ofertas de laptops y tabletas, nuevas o de segunda mano, enfocada a la comunidad de la ESCOM. 
+Trabajo Terminal No. 2027-A196 · Escuela Superior de Cómputo (ESCOM) · Instituto Politécnico Nacional
 
-La innovación principal radica en la integración de un **módulo de filtrado por compatibilidad de perfil**. Mediante un algoritmo de filtrado basado en contenido (CBF), el sistema evalúa y etiqueta automáticamente las publicaciones contrastando las especificaciones de los equipos ofertados contra los requerimientos académicos del plan de estudios 2020 y los intereses declarados por el usuario.
+| | |
+| :--- | :--- |
+| **Alumnos** | Granados Martínez Pablo Daniel · López Hernández Alan |
+| **Directora** | M. en C. Galiñanes Rodríguez María Gabriela |
 
-## Arquitectura y Tecnologías (Stack)
-El sistema está diseñado bajo una **Arquitectura de Tres Niveles**, garantizando independencia entre componentes e impulsando la escalabilidad futura:
-* **Capa de Presentación (Frontend):** Interfaz de Usuario Responsiva desarrollada con React.js (Vite) + HTML/CSS/JavaScript.
-* **Capa de Lógica de Negocio (Backend):** Procesamiento de reglas de negocio y motor de recomendaciones académicas desarrollado con Python (FastAPI).
-* **Capa de Datos:** Almacenamiento persistente y gestión de integridad mediante base de datos relacional (PostgreSQL).
-* **Despliegue y Entorno:** Orquestado en contenedores mediante Docker y Docker Compose.
+## Descripción
 
-## Configuración y Despliegue Local
-El Sprint 1 contempla la configuración del entorno base de desarrollo. Para levantar el entorno en tu máquina local, sigue estos pasos:
+Aplicación web que centraliza la publicación de laptops y tabletas, nuevas o de segunda mano, para la comunidad de la ESCOM. Cada oferta se captura con una **ficha técnica estandarizada** (procesador, RAM, almacenamiento, GPU, pantalla, batería) y el sistema calcula una **compatibilidad con la carrera** del comprador usando un filtrado basado en contenido (CBF) contra el plan de estudios 2020 (ISC, IIA, LCD e ISISA).
 
-### Prerrequisitos
-* [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado y en ejecución.
-* Git.
+## Funcionalidad implementada
 
-### Pasos para ejecutar
-1. Clona este repositorio:
-   ```bash
-   git clone [https://github.com/PabloGranados/TT-2027-A196-ESCOM](https://github.com/PabloGranados/TT-2027-A196-ESCOM)
-   cd TT-2027-A196-ESCOM
+| Módulo | Qué incluye |
+| :--- | :--- |
+| **Cuentas** | Registro con rol (Alumno, Docente, PAAE, Externo), carrera, semestre e intereses; inicio y cierre de sesión con cookie `HttpOnly`; confirmación de correo con insignia IPN; perfil académico editable y restablecible. |
+| **Publicaciones** | Alta con ficha técnica y validaciones; detección de duplicados que suma existencias; edición; cambio de estado (Activa, Vendida, Obsoleta); eliminación; sección *Mis publicaciones*. |
+| **Marketplace** | Catálogo con tarjetas, ficha técnica en ventana modal, contacto del vendedor por teléfono o WhatsApp bajo demanda, favoritos. |
+| **Filtros** | 13 filtros combinables (texto, tipo, marca, condición, RAM, almacenamiento, tipo de disco, GPU, rango de precio, vendedor IPN, compatibilidad con la carrera y ordenamiento). |
+| **Compatibilidad (CBF)** | Puntaje de 0 a 100 % y etiqueta explicativa según carrera y especificaciones del equipo. |
 
-### Autenticación inicial
+El detalle de cada caso de uso, regla de negocio y endpoint está en la [documentación](#documentación).
 
-El backend expone un flujo de registro y sesión con PostgreSQL. Las sesiones se
-guardan en la tabla `sessions` y el navegador recibe únicamente una cookie
-`HttpOnly`; las contraseñas se almacenan con hash `scrypt`.
+## Arquitectura y tecnologías
 
-Endpoints:
+Arquitectura de tres niveles, cada una en su contenedor:
 
-* `POST /auth/register`: crea una cuenta y abre su sesión.
-* `POST /auth/login`: inicia sesión con correo y contraseña.
-* `GET /auth/me`: devuelve el usuario autenticado para restaurar la sesión.
-* `POST /auth/logout`: invalida la sesión actual.
+```mermaid
+flowchart LR
+    U([Navegador]) -->|HTTP :5173| F["Frontend<br/>React 19 + Vite"]
+    F -->|"REST + cookie HttpOnly :8000"| B["Backend<br/>FastAPI + SQLAlchemy"]
+    B -->|SQL :5432| D[("PostgreSQL 15")]
+```
 
-Variables del backend:
+| Capa | Tecnología |
+| :--- | :--- |
+| Presentación | React 19, Vite 8, CSS propio, Oxlint |
+| Lógica de negocio | Python 3.10, FastAPI, SQLAlchemy 2, Pydantic |
+| Datos | PostgreSQL 15 (volumen Docker `postgres_data`) |
+| Despliegue local | Docker y Docker Compose |
 
-* `DATABASE_URL`: conexión PostgreSQL.
-* `FRONTEND_ORIGIN`: origen permitido por CORS, por defecto `http://localhost:5173`.
-* `SESSION_TTL_SECONDS`: duración de la sesión, por defecto 3600 segundos.
-* `COOKIE_SECURE`: usa `Secure` en la cookie; debe ser `true` detrás de HTTPS.
+## Inicio rápido
 
-`VITE_API_URL` configura la URL pública del backend para el frontend. En Docker
-Compose local se configura como `http://localhost:8000`. No se almacenan tokens
-de sesión en `localStorage`.
+### Requisitos
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) en ejecución
+- Git
+
+### Pasos
+
+```bash
+git clone https://github.com/PabloGranados/TT-2027-A196-ESCOM
+cd TT-2027-A196-ESCOM
+
+# 1. Crea tu archivo de configuración local (no se sube a GitHub)
+cp .env.example .env          # en PowerShell: Copy-Item .env.example .env
+# 2. Edita .env y cambia POSTGRES_PASSWORD (y opcionalmente DEMO_USER_PASSWORD)
+
+# 3. Levanta los tres servicios
+docker compose up -d --build
+```
+
+| Servicio | URL |
+| :--- | :--- |
+| Aplicación web | http://localhost:5173 |
+| API | http://localhost:8000 |
+| Documentación interactiva de la API (Swagger) | http://localhost:8000/docs |
+
+Al primer arranque el backend crea las tablas y carga cinco publicaciones de ejemplo. Si defines `DEMO_USER_PASSWORD` en `.env`, la pantalla de inicio de sesión muestra el botón **Autocompletar** con la cuenta de demostración; si lo dejas vacío, la cuenta de ejemplo no se puede usar para iniciar sesión.
+
+### Comandos útiles
+
+```bash
+docker compose logs -f backend     # ver registros del backend
+docker compose restart frontend    # reiniciar un servicio
+docker compose down                # detener (conserva los datos)
+docker compose down -v             # detener y BORRAR la base de datos
+```
+
+```powershell
+.\scripts\backup_db.ps1                                      # respaldo de la base de datos
+.\scripts\restore_db.ps1 -File .\backups\<archivo>.sql       # restaurar un respaldo
+```
+
+## Variables de entorno
+
+Se definen en `.env` (plantilla en [`.env.example`](.env.example)).
+
+| Variable | Descripción | Valor por defecto |
+| :--- | :--- | :--- |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciales y nombre de la base de datos | Obligatorias |
+| `FRONTEND_ORIGIN` | Origen permitido por CORS | `http://localhost:5173` |
+| `SESSION_TTL_SECONDS` | Duración de la sesión | `3600` |
+| `COOKIE_SECURE` | Marca la cookie como `Secure`; usar `true` con HTTPS | `false` |
+| `VITE_API_URL` | URL pública del backend para el frontend | `http://localhost:8000` |
+| `DEMO_USER_EMAIL`, `DEMO_USER_PASSWORD` | Cuenta de demostración opcional (solo desarrollo) | Vacío |
+
+## Estructura del repositorio
+
+```text
+.
+├── backend/                  API FastAPI (main.py), Dockerfile, requirements.txt
+├── frontend/                 Aplicación React (src/App.jsx, src/App.css), Dockerfile
+├── docs/
+│   ├── DOCUMENTACION_TECNICA.md
+│   ├── base_de_datos/        Diccionario de datos, ER y schema.sql
+│   └── pdf/                  Versión en PDF de la documentación
+├── scripts/                  Respaldo/restauración de la base de datos y generación de PDF
+├── DOCUMENTACION_CASOS_DE_USO.md
+├── docker-compose.yml
+└── .env.example
+```
+
+## Documentación
+
+| Documento | Contenido | PDF |
+| :--- | :--- | :--- |
+| [Casos de uso](DOCUMENTACION_CASOS_DE_USO.md) | Casos de uso, reglas de negocio, filtros, algoritmo CBF y API | [PDF](docs/pdf/DOCUMENTACION_CASOS_DE_USO.pdf) |
+| [Documentación técnica](docs/DOCUMENTACION_TECNICA.md) | Arquitectura, seguridad, backend, frontend, despliegue y limitaciones | [PDF](docs/pdf/DOCUMENTACION_TECNICA.pdf) |
+| [Base de datos](docs/base_de_datos/DOCUMENTACION_BASE_DE_DATOS.md) | Modelo entidad-relación y diccionario de datos | [PDF](docs/pdf/DOCUMENTACION_BASE_DE_DATOS.pdf) |
+
+Los PDF se regeneran con `node scripts/docs-pdf/build.mjs` (ver la [documentación técnica](docs/DOCUMENTACION_TECNICA.md#11-generación-de-los-pdf)).
+
+## Seguridad
+
+- Contraseñas con hash `scrypt` y sal aleatoria; nunca se guardan en texto plano.
+- Sesión en cookie `HttpOnly` y `SameSite=Lax`; en la base de datos solo se guarda el hash SHA-256 del token. No se usa `localStorage`.
+- El teléfono de contacto de una oferta solo se entrega a usuarios con sesión mediante una acción explícita.
+- Las credenciales de la base de datos y de la cuenta demo viven únicamente en `.env`, que está excluido del repositorio.
+- No subas el archivo `.env`, respaldos (`backups/`) ni volcados de datos reales.
+
+## Flujo de trabajo con Git
+
+- `main`: versión estable y documentada.
+- `sprint1`, `sprint2`, …: ramas de referencia por sprint.
+- Mensajes de commit con prefijo `feat:`, `fix:`, `docs:`, `style:` o `chore:`.
