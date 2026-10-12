@@ -20,6 +20,9 @@ from sqlalchemy import (
     Text,
     create_engine,
     delete,
+    func,
+    not_,
+    or_,
     select,
     text,
 )
@@ -793,6 +796,29 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 # ----------------------------------------------------
 
 # CU: Buscar Publicaciones de Oferta (Pág. 16, 17, 18, 19, 20)
+GPU_INTEGRADA_TERMS = ["integrada", "intel iris", "intel uhd", "vega", "radeon graphics"]
+
+
+@app.get("/api/filters/options")
+def get_filter_options(db: Session = Depends(get_db)):
+    """Opciones dinámicas para los filtros del catálogo (marcas y rango de precios)."""
+    active = Publication.status == "Activa"
+    brands = db.scalars(select(Publication.brand).where(active).distinct().order_by(Publication.brand)).all()
+    min_p, max_p = db.execute(
+        select(func.min(Publication.price), func.max(Publication.price)).where(active)
+    ).one()
+    return {
+        "brands": brands,
+        "device_types": ["Laptop", "Tableta"],
+        "conditions": ["Nuevo", "Usado - Como nuevo", "Usado - Buen estado", "Usado - Con detalles"],
+        "storage_types": ["SSD NVMe", "SSD SATA", "HDD", "eMMC"],
+        "ram_options": [4, 8, 12, 16, 24, 32, 64],
+        "storage_options": [128, 256, 512, 1024, 2048],
+        "sort_options": ["recientes", "precio_asc", "precio_desc", "compatibilidad"],
+        "price_range": {"min": min_p or 0, "max": max_p or 0},
+    }
+
+
 @app.get("/api/publications", response_model=List[PublicationResponse])
 def get_publications(
     request: Request,
@@ -801,6 +827,13 @@ def get_publications(
     condition: Optional[str] = Query(None, description="Filtrar por estado del equipo"),
     min_price: Optional[float] = Query(None, ge=0),
     max_price: Optional[float] = Query(None, ge=0),
+    brand: Optional[str] = Query(None, description="Marca del equipo"),
+    min_ram: Optional[int] = Query(None, ge=1, description="RAM mínima en GB"),
+    min_storage: Optional[int] = Query(None, ge=1, description="Almacenamiento mínimo en GB"),
+    storage_type: Optional[str] = Query(None, description="SSD NVMe, SSD SATA, HDD o eMMC"),
+    gpu_type: Optional[str] = Query(None, description="'dedicada' o 'integrada'"),
+    ipn_sellers_only: bool = Query(False, description="Solo vendedores con correo institucional"),
+    sort_by: str = Query("recientes", description="recientes, precio_asc, precio_desc o compatibilidad"),
     only_compatible: bool = Query(False, description="Activar Búsqueda por Compatibilidad de Perfil (RN-05)"),
     db: Session = Depends(get_db),
 ):
@@ -827,6 +860,28 @@ def get_publications(
     if max_price is not None:
         query = query.where(Publication.price <= max_price)
 
+    if brand and brand != "Todas":
+        query = query.where(Publication.brand.ilike(brand.strip()))
+
+    if min_ram is not None:
+        query = query.where(Publication.ram_gb >= min_ram)
+
+    if min_storage is not None:
+        query = query.where(Publication.storage_gb >= min_storage)
+
+    if storage_type and storage_type != "Todos":
+        query = query.where(Publication.storage_type == storage_type)
+
+    if gpu_type in ("dedicada", "integrada"):
+        is_integrated = or_(
+            Publication.gpu.is_(None),
+            *[Publication.gpu.ilike(f"%{term}%") for term in GPU_INTEGRADA_TERMS],
+        )
+        query = query.where(is_integrated if gpu_type == "integrada" else not_(is_integrated))
+
+    if ipn_sellers_only:
+        query = query.join(User, User.id == Publication.seller_id).where(User.es_institucional.is_(True))
+
     if search:
         st = f"%{search.strip().lower()}%"
         query = query.where(
@@ -837,7 +892,12 @@ def get_publications(
             | (Publication.description.ilike(st))
         )
 
-    query = query.order_by(Publication.created_at.desc())
+    if sort_by == "precio_asc":
+        query = query.order_by(Publication.price.asc())
+    elif sort_by == "precio_desc":
+        query = query.order_by(Publication.price.desc())
+    else:
+        query = query.order_by(Publication.created_at.desc())
     publications = db.scalars(query).all()
 
     results = [to_pub_response(pub, user, db) for pub in publications]
@@ -845,6 +905,8 @@ def get_publications(
     if only_compatible:
         # RN-05: Filtrar y priorizar aquellas con alta compatibilidad (>=80%)
         results = [r for r in results if (r.compatibility_score or 0) >= 80]
+        results.sort(key=lambda x: (x.compatibility_score or 0), reverse=True)
+    elif sort_by == "compatibilidad":
         results.sort(key=lambda x: (x.compatibility_score or 0), reverse=True)
 
     return results

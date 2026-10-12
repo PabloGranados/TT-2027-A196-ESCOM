@@ -110,7 +110,51 @@ flowchart LR
 
 ---
 
+### Caso de Uso CU-05: Filtrar y Ordenar Publicaciones de Oferta
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Identificador** | **CU-05** |
+| **Nombre** | Filtrar y Ordenar Publicaciones de Oferta |
+| **Actor Principal** | Comerciante (Comprador) |
+| **Relación** | *Extiende* a CU-04 (Consultar Publicaciones de Oferta) |
+| **Propósito** | Reducir el catálogo a los equipos que cumplen con las características técnicas, comerciales y de compatibilidad que el comprador necesita. |
+| **Precondiciones** | Existen publicaciones con estatus `Activa`. Para el filtro de compatibilidad, el usuario debe tener carrera y semestre registrados. |
+| **Flujo Principal** | 1. El usuario se encuentra en la página principal.<br/>2. Captura texto en el buscador o selecciona uno o más filtros del catálogo (tabla de filtros).<br/>3. El sistema consulta las publicaciones activas aplicando todos los filtros seleccionados de forma combinada (operador lógico Y).<br/>4. El sistema ordena el resultado según el criterio elegido.<br/>5. El sistema actualiza el listado y muestra el número de ofertas encontradas y la cantidad de filtros activos.<br/>6. El usuario puede presionar **"Limpiar"** para restablecer todos los filtros. |
+| **Flujos Alternos / Errores** | **3a. Sin resultados:** El sistema muestra el mensaje "No se encontraron publicaciones" y ofrece restablecer los filtros.<br/>**3b. Perfil incompleto:** Si activa *Compatibilidad con mi carrera* sin carrera y semestre, el sistema lo impide e indica que debe completar su perfil.<br/>**3c. Rango de precio inválido:** Si el precio mínimo es mayor al máximo, el sistema devuelve una lista vacía. |
+| **Postcondiciones** | El catálogo refleja únicamente las ofertas que cumplen todos los criterios elegidos. |
+
+#### Catálogo de filtros
+
+| # | Filtro | Control | Valores | Campo evaluado | Criterio |
+| :-: | :--- | :--- | :--- | :--- | :--- |
+| F-01 | Búsqueda por texto | Campo de búsqueda | Texto libre | `title`, `brand`, `model`, `processor`, `description` | Contiene (sin distinguir mayúsculas) |
+| F-02 | Tipo de equipo | Lista | Laptop, Tableta | `device_type` | Igual a |
+| F-03 | Marca | Lista dinámica | Marcas con ofertas activas | `brand` | Igual a |
+| F-04 | Condición | Lista | Nuevo, Como nuevo, Buen estado, Con detalles | `condition` | Igual a |
+| F-05 | RAM mínima | Lista | 4, 8, 12, 16, 24, 32 GB | `ram_gb` | Mayor o igual a |
+| F-06 | Almacenamiento mínimo | Lista | 128 GB, 256 GB, 512 GB, 1 TB | `storage_gb` | Mayor o igual a |
+| F-07 | Tipo de disco | Lista | SSD NVMe, SSD SATA, HDD, eMMC | `storage_type` | Igual a |
+| F-08 | Tarjeta gráfica | Lista | Dedicada, Integrada | `gpu` | Dedicada: no contiene términos de gráficos integrados |
+| F-09 | Precio mínimo | Campo numérico | MXN | `price` | Mayor o igual a |
+| F-10 | Precio máximo | Campo numérico | MXN | `price` | Menor o igual a |
+| F-11 | Vendedor con correo IPN | Casilla | Sí / No | `users.es_institucional` | Verdadero |
+| F-12 | Compatibilidad con mi carrera | Botón | Activado / Desactivado | Puntaje CBF | Mayor o igual a 80 % |
+| F-13 | Ordenar por | Lista | Más recientes, Precio ascendente, Precio descendente, Mayor compatibilidad | `created_at`, `price`, puntaje CBF | Orden |
+
+**Regla adicional:** el catálogo siempre excluye publicaciones con estatus distinto de `Activa`.
+
+**Consulta de ejemplo:**
+
+```
+GET /api/publications?device_type=Laptop&min_ram=16&gpu_type=dedicada&max_price=20000&sort_by=precio_asc
+```
+
+---
+
 ## 4. Esquema de Base de Datos Relacional (PostgreSQL)
+
+> El diccionario de datos completo y el script del esquema están en [`docs/base_de_datos`](docs/base_de_datos/DOCUMENTACION_BASE_DE_DATOS.md).
 
 El modelo de datos implementado en SQLAlchemy refleja la arquitectura de tres capas:
 
@@ -187,7 +231,8 @@ El motor de filtrado evalúa la tupla `(Hardware_Specs, Perfil_Estudiante)` cont
 | `GET` | `/auth/me` | Obtiene los datos del usuario conectado | Requerida (Cookie) |
 | `POST` | `/auth/logout` | Invalida el token y limpia la cookie | Requerida (Cookie) |
 | `PUT` | `/auth/profile` | Actualiza carrera, semestre, intereses o teléfono | Requerida (Cookie) |
-| `GET` | `/api/publications` | Lista ofertas activas con filtros y puntaje CBF | Opcional (calcula con usuario si existe) |
+| `GET` | `/api/publications` | Lista ofertas activas con filtros F-01 a F-13 y puntaje CBF | Opcional (calcula con usuario si existe) |
+| `GET` | `/api/filters/options` | Opciones disponibles para los filtros (marcas, rango de precios) | No requerida |
 | `GET` | `/api/publications/{id}` | Ficha técnica y datos de contacto de una oferta | Opcional |
 | `POST` | `/api/publications` | Crea una nueva publicación de laptop/tableta | Requerida (Cookie) |
 | `GET` | `/api/my-publications` | Lista las ofertas creadas por el usuario activo | Requerida (Cookie) |
