@@ -1,0 +1,9 @@
+﻿{
+  "name": "docs-pdf",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "marked": "^15.0.7",
+    "puppeteer-core": "^24.4.0"
+  }
+}

@@ -202,3 +202,4 @@ Para conservar una copia segura de los datos:
 ```powershell
 docker exec -it escom_db psql -U escom_user -d hardware_match_db
 ```
+

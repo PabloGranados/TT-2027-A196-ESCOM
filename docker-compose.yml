@@ -1,16 +1,14 @@
-version: '3.8'
-
 services:
   # Capa de Datos (PostgreSQL)
   db:
     image: postgres:15
     container_name: escom_db
     environment:
-      POSTGRES_USER: escom_user
-      POSTGRES_PASSWORD: escom_password
-      POSTGRES_DB: hardware_match_db
+      POSTGRES_USER: ${POSTGRES_USER:?Define POSTGRES_USER en el archivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en el archivo .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Define POSTGRES_DB en el archivo .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -23,10 +21,12 @@ services:
     depends_on:
       - db
     environment:
-      - DATABASE_URL=postgresql://escom_user:escom_password@db:5432/hardware_match_db
-      - FRONTEND_ORIGIN=http://localhost:5173
-      - SESSION_TTL_SECONDS=3600
-      - COOKIE_SECURE=false
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-http://localhost:5173}
+      - SESSION_TTL_SECONDS=${SESSION_TTL_SECONDS:-3600}
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - DEMO_USER_EMAIL=${DEMO_USER_EMAIL:-}
+      - DEMO_USER_PASSWORD=${DEMO_USER_PASSWORD:-}
     volumes:
       - ./backend:/app
 
@@ -39,7 +39,9 @@ services:
     depends_on:
       - backend
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+      - VITE_DEMO_EMAIL=${DEMO_USER_EMAIL:-}
+      - VITE_DEMO_PASSWORD=${DEMO_USER_PASSWORD:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules

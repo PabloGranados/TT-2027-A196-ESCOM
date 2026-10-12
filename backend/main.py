@@ -38,12 +38,16 @@ from sqlalchemy.orm import (
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://escom_user:escom_password@localhost:5432/hardware_match_db",
+    "sqlite:///./hardware_match.db",
 )
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 SESSION_COOKIE = "escom_session"
+# Cuenta de demostración opcional (solo desarrollo). Si DEMO_USER_PASSWORD no está definida,
+# el vendedor de los datos de ejemplo se crea con una contraseña aleatoria que nadie conoce.
+DEMO_USER_EMAIL = os.getenv("DEMO_USER_EMAIL", "demo.escom@ipn.mx").strip().lower()
+DEMO_USER_PASSWORD = os.getenv("DEMO_USER_PASSWORD", "")
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
@@ -466,7 +470,8 @@ def to_pub_response(pub: Publication, user: Optional[User], db: Optional[Session
         stock=pub.stock,
         description=pub.description,
         image_url=pub.image_url,
-        contact_phone=pub.contact_phone,
+        # El teléfono solo se expone al propietario; los demás lo obtienen en /contact (requiere sesión)
+        contact_phone=pub.contact_phone if (user and user.id == pub.seller_id) else None,
         status=pub.status,
         created_at=pub.created_at,
         updated_at=pub.updated_at,
@@ -521,17 +526,17 @@ def seed_database(db: Session):
         return
 
     # Usuario demo verificado e institucional
-    demo_user = db.scalar(select(User).where(User.email == "demo.escom@ipn.mx"))
+    demo_user = db.scalar(select(User).where(User.email == DEMO_USER_EMAIL))
     if not demo_user:
         demo_user = User(
             name="Comunidad ESCOM (Verificado)",
-            email="demo.escom@ipn.mx",
-            password_hash=hash_password("Escom2027*"),
+            email=DEMO_USER_EMAIL,
+            password_hash=hash_password(DEMO_USER_PASSWORD or secrets.token_urlsafe(24)),
             role="Alumno",
             career="Ingeniería en Sistemas Computacionales",
             semester="6° semestre",
             interests="Desarrollo Web & Software, Inteligencia Artificial, Redes",
-            phone="5548178950",
+            phone="5555550101",
             is_verified=True,
             es_institucional=True,
         )
@@ -558,7 +563,7 @@ def seed_database(db: Session):
             stock=1,
             description="Laptop en excelente estado estético y funcional. Perfecta para estudiantes de IIA o ISC que requieran entrenar redes neuronales con CUDA o levantar múltiples contenedores Docker. Incluye caja y mochila original.",
             image_url="https://images.unsplash.com/photo-1603302576837-37561b2e2302?auto=format&fit=crop&w=800&q=80",
-            contact_phone="5548178950",
+            contact_phone="5555550101",
             status="Activa",
         ),
         Publication(
@@ -579,7 +584,7 @@ def seed_database(db: Session):
             stock=1,
             description="Equipo ligero y resistente, ideal para llevar todos los días a la ESCOM. Teclado retroiluminado, puertos USB-C Thunderbolt y HDMI nativo para proyectores. Probada con Ubuntu 22.04 y Windows 11.",
             image_url="https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?auto=format&fit=crop&w=800&q=80",
-            contact_phone="5541260257",
+            contact_phone="5555550102",
             status="Activa",
         ),
         Publication(
@@ -600,7 +605,7 @@ def seed_database(db: Session):
             stock=1,
             description="Color Midnight. Configurada de fábrica con 16GB de memoria unificada. Excelente para desarrollo frontend, backend, iOS y ofimática. La batería dura más de 12 horas en el campus.",
             image_url="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=800&q=80",
-            contact_phone="5548178950",
+            contact_phone="5555550101",
             status="Activa",
         ),
         Publication(
@@ -621,7 +626,7 @@ def seed_database(db: Session):
             stock=1,
             description="Incluye S Pen original de baja latencia y funda con teclado magnético. Ideal para tomar notas en clase de matemáticas/algoritmos, leer libros técnicos y usar como segunda pantalla inalámbrica.",
             image_url="https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80",
-            contact_phone="5541260257",
+            contact_phone="5555550102",
             status="Activa",
         ),
         Publication(
@@ -642,7 +647,7 @@ def seed_database(db: Session):
             stock=1,
             description="Excelente opción costo-beneficio para modelado en SolidWorks, AutoCAD y análisis de datos. Construcción con certificación militar MIL-STD-810H. Teclado RGB.",
             image_url="https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=800&q=80",
-            contact_phone="5548178950",
+            contact_phone="5555550101",
             status="Activa",
         ),
     ]

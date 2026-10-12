@@ -1,150 +1,268 @@
 # Instituto Politécnico Nacional
 ## Escuela Superior de Cómputo (ESCOM)
 ### Trabajo Terminal No. 2027-A196
+
 **"Prototipo de aplicación web para la recomendación de publicaciones de oferta de laptops y tabletas entre la comunidad de la ESCOM"**
 
-* **Alumnos:** Granados Martínez Pablo Daniel, López Hernández Alan  
-* **Directora:** M. en C. Galiñanes Rodríguez María Gabriela  
+* **Alumnos:** Granados Martínez Pablo Daniel, López Hernández Alan
+* **Directora:** M. en C. Galiñanes Rodríguez María Gabriela
 
 ---
 
-## 1. Introducción y Alcance de la Fase 1
+## 1. Introducción y alcance
 
-El presente documento detalla la especificación formal de requisitos, diseño de datos y casos de uso correspondientes a la **Fase 1 del desarrollo del prototipo** (Sprints 1 al 5 del cronograma de TT1). Esta entrega comprende:
+Este documento especifica los casos de uso, las reglas de negocio, los filtros y el algoritmo de compatibilidad **implementados en el prototipo**. Para la arquitectura y el detalle técnico consulta la [documentación técnica](docs/DOCUMENTACION_TECNICA.md); para el modelo de datos, la [documentación de la base de datos](docs/base_de_datos/DOCUMENTACION_BASE_DE_DATOS.md).
 
-1. **CU-01 Iniciar Sesión (Login):** Autenticación segura mediante cookies `HttpOnly` y hashing scrypt.
-2. **CU-02 Crear Nueva Cuenta (Registro de Perfil Académico):** Registro abierto con captura del rol institucional (Alumno, Docente, PAAE, Externo), carrera ESCOM (ISC, IIA, LCD, ISISA), semestre y catálogo predefinido de intereses.
-3. **CU-03 Crear Publicación de Oferta:** Formulario estandarizado de laptops y tabletas con especificaciones técnicas detalladas (procesador, RAM, almacenamiento, GPU, estado, batería, precio y contacto).
-4. **CU-04 Consultar Publicaciones de Oferta (Página Principal / Marketplace):** Exploración de catálogo con barra de búsqueda, filtros por categoría/presupuesto, visualización de fichas técnicas en modal y etiquetado dinámico de compatibilidad académica.
+### 1.1 Resumen de casos de uso
+
+| ID | Caso de uso | Actor | Pág. del documento TT | Backend | Interfaz |
+| :-: | :--- | :--- | :-: | :-: | :-: |
+| CU-01 | Iniciar sesión | Usuario registrado | 1 | Sí | Sí |
+| CU-02 | Crear nueva cuenta | Visitante | 2 | Sí | Sí |
+| CU-03 | Crear publicación de oferta | Vendedor | 9 | Sí | Sí |
+| CU-04 | Consultar publicaciones de oferta | Comprador | 16-20 | Sí | Sí |
+| CU-05 | Filtrar y ordenar publicaciones | Comprador | 16-20 | Sí | Sí |
+| CU-06 | Confirmar correo de verificación | Usuario registrado | 4-5 | Sí | Sí |
+| CU-07 | Consultar y editar perfil académico | Usuario registrado | 6-8 | Sí | Sí |
+| CU-08 | Ver detalle de una publicación | Comprador | 13, 28 | Sí | Sí |
+| CU-09 | Contactar al vendedor | Comprador | 32 | Sí | Sí |
+| CU-10 | Consultar mis publicaciones | Vendedor | 12 | Sí | Sí |
+| CU-11 | Actualizar estado de una publicación | Vendedor | 14 | Sí | Sí |
+| CU-12 | Eliminar publicación | Vendedor | 11 | Sí | Sí |
+| CU-13 | Editar publicación | Vendedor | 10 | Sí | No (solo API) |
+| CU-14 | Gestionar favoritos | Comprador | 42-44 | Sí | Sí |
+| CU-15 | Cerrar sesión | Usuario registrado | — | Sí | Sí |
+
+> Pendiente para fases posteriores del TT: valoraciones de vendedores, reportes, notificaciones y recomendación híbrida. El backend ya devuelve la bandera `invite_rating` al vender la última pieza, pero la interfaz de valoraciones aún no existe.
 
 ---
 
-## 2. Diagrama de Casos de Uso de la Fase 1
-
-Basado en el diagrama general de casos de uso del Trabajo Terminal, este subconjunto delimita el núcleo operativo del marketplace:
+## 2. Diagrama de casos de uso
 
 ```mermaid
 flowchart LR
-    Actor((Comerciante /<br/>Miembro ESCOM))
+    V(["Visitante"])
+    U(["Usuario<br/>comprador / vendedor"])
 
-    subgraph Plataforma ESCOM Hardware Match
-        CU01["CU 01: Iniciar Sesión"]
-        CU02["CU 02: Crear Nueva Cuenta"]
-        CU03["CU 03: Crear Publicación de Oferta"]
-        CU04["CU 04: Consultar Publicaciones (Marketplace)"]
-        CU04_1["CU 04.1: Filtrar Publicaciones por Presupuesto y Tipo"]
-        CU04_2["CU 04.2: Ver Detalle Técnico de Publicación"]
-        CU04_3["CU 04.3: Evaluar Compatibilidad (Línea Base CBF)"]
+    subgraph Plataforma["ESCOM Hardware Match"]
+        CU02["CU-02 Crear cuenta"]
+        CU06["CU-06 Confirmar correo"]
+        CU01["CU-01 Iniciar sesión"]
+        CU15["CU-15 Cerrar sesión"]
+        CU07["CU-07 Perfil académico"]
+
+        CU04["CU-04 Consultar publicaciones"]
+        CU05["CU-05 Filtrar y ordenar"]
+        CU08["CU-08 Ver detalle"]
+        CU09["CU-09 Contactar vendedor"]
+        CU14["CU-14 Favoritos"]
+
+        CU03["CU-03 Crear publicación"]
+        CU10["CU-10 Mis publicaciones"]
+        CU11["CU-11 Actualizar estado"]
+        CU12["CU-12 Eliminar publicación"]
+        CU13["CU-13 Editar publicación"]
     end
 
-    Actor --> CU01
-    Actor --> CU02
-    Actor --> CU03
-    Actor --> CU04
+    V --> CU02
+    V --> CU01
+    U --> CU01
+    U --> CU15
+    U --> CU07
+    U --> CU04
+    U --> CU03
+    U --> CU10
+    U --> CU14
 
-    CU04 -.->|«extend»| CU04_1
-    CU04 -.->|«include»| CU04_2
-    CU04 -.->|«include»| CU04_3
+    CU02 -.->|include| CU06
+    CU04 -.->|extend| CU05
+    CU04 -.->|include| CU08
+    CU08 -.->|extend| CU09
+    CU10 -.->|extend| CU11
+    CU10 -.->|extend| CU12
+    CU10 -.->|extend| CU13
 ```
 
 ---
 
-## 3. Especificación Formal de Casos de Uso
+## 3. Especificación de casos de uso
 
-### Caso de Uso CU-01: Iniciar Sesión
+### CU-01 · Iniciar sesión
 
 | Campo | Descripción |
 | :--- | :--- |
-| **Identificador** | **CU-01** |
-| **Nombre** | Iniciar Sesión |
-| **Actor Principal** | Comerciante / Usuario registrado |
-| **Propósito** | Autenticar al usuario para acceder a sus ofertas, preferencias y cálculo personalizado de compatibilidad técnica. |
-| **Precondiciones** | El usuario debe poseer una cuenta previamente creada en la plataforma. |
-| **Flujo Principal** | 1. El usuario navega a la pantalla de autenticación.<br/>2. El sistema presenta el formulario de inicio de sesión solicitando correo electrónico y contraseña.<br/>3. El usuario ingresa sus credenciales y hace clic en **"Entrar a la plataforma"**.<br/>4. El sistema normaliza el correo y valida la contraseña contra el hash scrypt almacenado en la base de datos.<br/>5. El sistema genera un token de sesión criptográfico, lo persiste en la tabla `sessions` y emite una cookie segura `HttpOnly`.<br/>6. El sistema redirige al usuario a la vista principal (Marketplace) mostrando su perfil y ofertas adaptadas. |
-| **Flujos Alternos / Errores** | **4a. Credenciales incorrectas:** El sistema detecta contraseña errónea o correo no registrado; responde con código HTTP 401 y muestra: *"Correo o contraseña incorrectos"*. Permite reintentar.<br/>**4b. Error de conexión:** El sistema reporta fallo al contactar al servidor y mantiene los campos editables. |
-| **Postcondiciones** | Sesión activa en el cliente y servidor; disponibilidad del perfil académico para el filtrado CBF. |
+| **Actor** | Usuario registrado |
+| **Propósito** | Autenticar al usuario para acceder a sus ofertas y al cálculo personalizado de compatibilidad. |
+| **Precondición** | Existe una cuenta con el correo capturado. |
+| **Flujo principal** | 1. El usuario abre la aplicación y ve la pantalla *Iniciar sesión*.<br/>2. Captura correo y contraseña y presiona **Entrar**.<br/>3. El sistema normaliza el correo (minúsculas, sin espacios) y valida la contraseña contra el hash `scrypt`.<br/>4. El sistema genera un token de sesión, guarda su hash SHA-256 en `sessions` y envía una cookie `HttpOnly`.<br/>5. La interfaz muestra la página principal. |
+| **Flujos alternos** | **3a. Credenciales incorrectas:** HTTP 401 «Correo o contraseña incorrectos»; el usuario puede reintentar.<br/>**3b. Servidor no disponible:** la interfaz muestra un aviso de conexión y conserva lo capturado. |
+| **Postcondición** | Sesión activa durante `SESSION_TTL_SECONDS` (3600 s por defecto). Al recargar la página la sesión se restaura con `GET /auth/me`. |
+
+### CU-02 · Crear nueva cuenta
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Visitante |
+| **Propósito** | Registrar al usuario con su perfil académico para alimentar el motor de recomendación. |
+| **Precondición** | El correo no está registrado. |
+| **Flujo principal** | 1. El usuario elige **Regístrate aquí**.<br/>2. Captura nombre, rol (Alumno, Docente, PAAE o Externo), teléfono opcional, correo y contraseña (mínimo 8 caracteres).<br/>3. Si el rol es **Alumno**, elige carrera (ISC, IIA, LCD, ISISA) y semestre (1° a 8°).<br/>4. Selecciona sus áreas de interés de un catálogo predefinido.<br/>5. El sistema valida los datos, calcula el hash `scrypt` y crea el usuario con `is_verified = false` y un token de verificación.<br/>6. El sistema abre la sesión y muestra la pantalla de confirmación de correo (CU-06). |
+| **Flujos alternos** | **5a. Correo duplicado:** HTTP 409 «El correo electrónico ya se encuentra registrado».<br/>**5b. Datos inválidos:** HTTP 422 con el campo observado. |
+| **Postcondición** | Usuario almacenado en `users` con su perfil académico. |
+
+### CU-03 · Crear publicación de oferta
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Vendedor (usuario con sesión) |
+| **Propósito** | Publicar un equipo con la ficha técnica estandarizada. |
+| **Precondición** | Sesión iniciada. |
+| **Flujo principal** | 1. El usuario abre **Vender equipo**.<br/>2. Captura tres bloques: **Datos generales** (tipo, condición, título, marca, modelo), **Ficha técnica** (procesador, RAM, almacenamiento, tipo de disco, GPU, pantalla, batería) y **Precio y entrega** (precio MXN, piezas, teléfono de contacto, foto, descripción).<br/>3. Presiona **Publicar oferta**.<br/>4. El sistema valida rangos (RN-04) y revisa duplicados (RN-09).<br/>5. El sistema guarda la oferta con estado `Activa` y la muestra en el catálogo. |
+| **Flujos alternos** | **4a. Datos fuera de rango:** HTTP 422; la interfaz muestra el error.<br/>**4b. Duplicado exacto (RN-09):** se suman las piezas a la oferta existente y se reactiva.<br/>**4c. Sesión expirada:** HTTP 401; se solicita iniciar sesión. |
+| **Postcondición** | Oferta en `publications`, visible en el catálogo y en *Mis publicaciones*. Si no se indica foto, se asigna una imagen genérica según el tipo de equipo. |
+
+### CU-04 · Consultar publicaciones de oferta
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Comprador |
+| **Propósito** | Explorar las ofertas activas y evaluar su compatibilidad. |
+| **Precondición** | Sesión iniciada. |
+| **Flujo principal** | 1. El usuario abre **Explorar**.<br/>2. El sistema lista las publicaciones con estado `Activa`, de la más reciente a la más antigua.<br/>3. Cada tarjeta muestra foto, tipo, marca y modelo, título, procesador, RAM, almacenamiento, precio y, si aplica, el puntaje y la etiqueta de compatibilidad.<br/>4. El usuario puede refinar el listado (CU-05) o abrir una oferta (CU-08). |
+| **Flujos alternos** | **2a. Sin resultados:** mensaje «No se encontraron publicaciones» con la opción de ver todas. |
+| **Postcondición** | El usuario identifica equipos adecuados a su carrera. |
+
+### CU-05 · Filtrar y ordenar publicaciones
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Comprador |
+| **Relación** | Extiende a CU-04 |
+| **Propósito** | Reducir el catálogo a los equipos que cumplen los criterios técnicos, comerciales y de compatibilidad. |
+| **Precondición** | Existen publicaciones activas. Para el filtro de compatibilidad, el perfil académico debe estar completo (RN-03). |
+| **Flujo principal** | 1. El usuario escribe en el buscador o elige filtros (tabla 5).<br/>2. El sistema aplica **todos** los filtros de forma combinada (operador Y).<br/>3. El sistema ordena el resultado según el criterio elegido.<br/>4. La interfaz muestra el número de ofertas y de filtros activos.<br/>5. **Limpiar** restablece los filtros. |
+| **Flujos alternos** | **2a. Perfil incompleto:** al activar *Compatibilidad con mi carrera* sin carrera y semestre, se informa que debe completar su perfil.<br/>**2b. Precio mínimo mayor al máximo:** el resultado es una lista vacía. |
+| **Postcondición** | El catálogo refleja solo las ofertas que cumplen todos los criterios. |
+
+### CU-06 · Confirmar correo de verificación
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Usuario recién registrado |
+| **Propósito** | Confirmar la cuenta y, si el correo es institucional, asignar la insignia IPN. |
+| **Flujo principal** | 1. Tras el registro, la interfaz ofrece **Confirmar correo y entrar**.<br/>2. El sistema recibe el token, marca `is_verified = true` y borra el token.<br/>3. Si el dominio del correo termina en `ipn.mx`, asigna la insignia (`es_institucional = true`, RN-02). |
+| **Flujos alternos** | **2a. Token inválido:** HTTP 400 «Enlace o token de verificación inválido o expirado». |
+| **Nota** | En el prototipo no se envía correo real: el token se entrega en la respuesta del registro para simular el enlace de verificación. |
+
+### CU-07 · Consultar y editar perfil académico
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Usuario registrado |
+| **Flujo principal** | 1. En **Mi perfil** el usuario ve nombre, correo, rol, carrera, semestre, intereses, insignia IPN y si su perfil permite calcular compatibilidad.<br/>2. **Editar perfil** permite cambiar carrera, semestre, teléfono e intereses; el sistema guarda los cambios.<br/>3. **Restablecer datos** borra carrera, semestre e intereses. |
+| **Postcondición** | Si se restablece el perfil, el filtro de compatibilidad queda deshabilitado hasta capturarlo de nuevo (RN-03). |
+
+### CU-08 · Ver detalle de una publicación
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Comprador |
+| **Flujo principal** | 1. El usuario abre una tarjeta.<br/>2. Se muestra una ventana con foto, precio, condición, existencias, estado, ficha técnica completa, descripción, datos públicos del vendedor (nombre, rol, carrera, insignia IPN) y la justificación de compatibilidad.<br/>3. Puede copiar el enlace o guardar la oferta en favoritos (CU-14). |
+| **Flujos alternos** | **1a. Oferta inexistente:** HTTP 404 «Publicación no encontrada». |
+
+### CU-09 · Contactar al vendedor
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Comprador con sesión |
+| **Flujo principal** | 1. En el detalle, el usuario presiona **Contactar al vendedor**.<br/>2. El sistema devuelve el contacto (teléfono de la oferta; si no existe, el del perfil; si tampoco, el correo del vendedor).<br/>3. La interfaz muestra el teléfono y el enlace **Enviar mensaje por WhatsApp**. |
+| **Flujos alternos** | **2a. El usuario es el vendedor (RN-10):** HTTP 400 «Eres el vendedor de esta publicación».<br/>**2b. Sin sesión:** HTTP 401. |
+| **Nota de privacidad** | El teléfono **no** viaja en los listados ni en el detalle; solo se obtiene en esta acción y únicamente con sesión. El propietario sí ve el teléfono de sus propias ofertas. |
+
+### CU-10 · Consultar mis publicaciones
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Vendedor |
+| **Flujo principal** | 1. El usuario abre **Mis publicaciones**.<br/>2. El sistema lista todas sus ofertas (cualquier estado), de la más reciente a la más antigua, con estado y existencias.<br/>3. Desde cada tarjeta puede ver el detalle o eliminar la oferta; desde el detalle puede cambiar su estado. |
+
+### CU-11 · Actualizar estado de una publicación
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Vendedor propietario |
+| **Flujo principal** | 1. En el detalle de su oferta elige **Marcar como vendida** o **Reactivar oferta**.<br/>2. El sistema actualiza el estado (`Activa`, `Vendida` u `Obsoleta`) y la fecha de modificación.<br/>3. Si el estado es `Vendida`, las existencias pasan a 0. Si había una sola pieza, la respuesta incluye `invite_rating = true`. |
+| **Flujos alternos** | **1a. No es el propietario:** HTTP 403.<br/>**1b. Oferta inexistente:** HTTP 404. |
+
+### CU-12 · Eliminar publicación
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Vendedor propietario |
+| **Flujo principal** | 1. Presiona **Eliminar** y confirma.<br/>2. El sistema borra la publicación y sus favoritos asociados (HTTP 204). |
+| **Flujos alternos** | **1a. No es el propietario:** HTTP 403. |
+
+### CU-13 · Editar publicación
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Vendedor propietario |
+| **Flujo principal** | `PUT /api/publications/{id}` recibe la ficha completa, valida (RN-04), actualiza los campos y la fecha de modificación. |
+| **Estado** | Disponible en la API; la pantalla de edición queda pendiente. |
+
+### CU-14 · Gestionar favoritos
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Comprador |
+| **Flujo principal** | 1. En el detalle de una oferta ajena, el usuario elige **Guardar en favoritos** (o quitarla).<br/>2. En **Favoritos** consulta la lista y puede **Quitar** elementos.<br/>3. La operación de agregar es idempotente: no duplica el favorito. |
+
+### CU-15 · Cerrar sesión
+
+| Campo | Descripción |
+| :--- | :--- |
+| **Actor** | Usuario registrado |
+| **Flujo principal** | El usuario presiona **Salir**; el sistema borra el hash del token en `sessions` y elimina la cookie (HTTP 204). |
 
 ---
 
-### Caso de Uso CU-02: Crear Nueva Cuenta (Registro de Perfil)
+## 4. Reglas de negocio
 
-| Campo | Descripción |
-| :--- | :--- |
-| **Identificador** | **CU-02** |
-| **Nombre** | Crear Nueva Cuenta / Registro Institucional |
-| **Actor Principal** | Comerciante / Miembro de la comunidad (Alumno, Docente, PAAE o Externo) |
-| **Propósito** | Dar de alta a un usuario capturando sus datos esenciales y su perfil académico (carrera, semestre e intereses) para el motor de recomendación. |
-| **Precondiciones** | No poseer una cuenta activa con el mismo correo electrónico. |
-| **Flujo Principal** | 1. El usuario selecciona la opción **"¿No tienes cuenta? Regístrate aquí"**.<br/>2. El sistema despliega el formulario con campos: Nombre completo, Rol, Correo, Contraseña, Teléfono/WhatsApp.<br/>3. Al seleccionar el rol **Alumno**, el sistema despliega selectores para: Carrera (ISC, IIA, LCD, ISISA), Semestre (1° a 8°) y el catálogo de intereses predefinidos.<br/>4. El usuario completa los datos, selecciona sus áreas de interés mediante botones chip y presiona **"Completar Registro"**.<br/>5. El backend valida la unicidad del correo, computa el hash criptográfico `scrypt` de la contraseña y crea el registro en la base de datos relacional.<br/>6. El sistema inicia sesión automáticamente al usuario y lo transfiere al catálogo principal con su perfil configurado. |
-| **Flujos Alternos / Errores** | **5a. Correo ya registrado:** El sistema detecta colisión de correo en la tabla `users`; emite código HTTP 409: *"El correo electrónico ya se encuentra registrado"*.<br/>**5b. Datos inválidos:** Falta de campos obligatorios o formato de correo inválido; el sistema emite código HTTP 422 y destaca los campos con error. |
-| **Postcondiciones** | Registro persistido en la tabla `users` con atributos curriculares listos para el contraste de hardware. |
-
----
-
-### Caso de Uso CU-03: Crear Publicación de Oferta (Estandarizada)
-
-| Campo | Descripción |
-| :--- | :--- |
-| **Identificador** | **CU-03** |
-| **Nombre** | Crear Publicación de Oferta de Laptop o Tableta |
-| **Actor Principal** | Comerciante (Vendedor) |
-| **Propósito** | Publicar una oferta de equipo de cómputo estructurada bajo la ficha técnica estandarizada definida en el protocolo de TT. |
-| **Precondiciones** | El usuario debe haber iniciado sesión en la plataforma. |
-| **Flujo Principal** | 1. El usuario hace clic en la pestaña **"+ Publicar Equipo"**.<br/>2. El sistema muestra el formulario dividido en tres bloques:<br/>&nbsp;&nbsp;&nbsp;&nbsp;a) **Información General:** Tipo (Laptop/Tableta), Condición (Nuevo, Usado - Como nuevo, Usado - Buen estado, etc.), Título, Marca y Modelo.<br/>&nbsp;&nbsp;&nbsp;&nbsp;b) **Ficha Técnica:** Procesador (CPU), Memoria RAM (GB), Almacenamiento (GB), Tipo de disco (SSD NVMe, SSD SATA, HDD, eMMC), Tarjeta gráfica (GPU), Pantalla y Batería.<br/>&nbsp;&nbsp;&nbsp;&nbsp;c) **Comercial:** Precio en MXN, Teléfono/WhatsApp de contacto, URL de fotografía y descripción detallada.<br/>3. El usuario completa los campos y presiona **"Publicar Oferta en ESCOM"**.<br/>4. El backend valida los rangos numéricos (RAM > 0, Almacenamiento > 0, Precio > 0) y guarda la publicación vinculada al ID del vendedor.<br/>5. El sistema notifica el éxito, refresca el catálogo y redirige a la página principal donde la publicación aparece de inmediato. |
-| **Flujos Alternos / Errores** | **4a. Campos incompletos:** Si el precio es menor o igual a cero o faltan especificaciones clave, el sistema bloquea el envío y muestra la advertencia en pantalla.<br/>**4b. Sesión expirada:** Si el token caducó, se solicita reautenticación antes de completar el guardado. |
-| **Postcondiciones** | Oferta almacenada en la tabla `publications` con estatus `Activa`, visible en el catálogo general y en la sección *Mis Publicaciones*. |
+| ID | Regla | Dónde se aplica |
+| :-: | :--- | :--- |
+| RN-01 | Toda cuenta nueva nace sin verificar y con un token de verificación. | CU-02, CU-06 |
+| RN-02 | Tras verificar el correo, si el dominio termina en `ipn.mx` se asigna la insignia institucional. | CU-06 |
+| RN-03 | El filtro de compatibilidad exige perfil completo: para alumnos, carrera y semestre. Docentes, PAAE y externos se consideran completos. | CU-05, CU-07 |
+| RN-04 | Ficha técnica estandarizada con validaciones: título de 3 a 200 caracteres, RAM de 2 a 256 GB, almacenamiento de 16 a 16 384 GB, precio mayor a 0, piezas mínimas 1, descripción de 5 a 2 500 caracteres. | CU-03, CU-13 |
+| RN-05 | El filtro de compatibilidad conserva solo ofertas con puntaje de 80 % o más, ordenadas de mayor a menor. | CU-05 |
+| RN-06 | El contacto del vendedor solo se entrega a usuarios con sesión y mediante una acción explícita. | CU-09 |
+| RN-07 | Prioridad del contacto: teléfono de la oferta, luego teléfono del perfil, luego correo. | CU-09 |
+| RN-08 | Obsolescencia: al iniciar el backend, las ofertas `Activa` sin modificarse en 30 días pasan a `Obsoleta`. | Inicio del backend |
+| RN-09 | Duplicados: si el vendedor ya tiene una oferta con la misma marca, modelo, procesador, RAM y almacenamiento y la **misma descripción**, se suman las piezas y se reactiva; si la descripción difiere, se crea una oferta nueva. Al vender, las existencias pasan a 0. | CU-03, CU-11 |
+| RN-10 | El vendedor no puede solicitar el contacto de su propia oferta. | CU-09 |
 
 ---
 
-### Caso de Uso CU-04: Consultar Publicaciones de Oferta (Página Principal)
+## 5. Catálogo de filtros
 
-| Campo | Descripción |
-| :--- | :--- |
-| **Identificador** | **CU-04** |
-| **Nombre** | Consultar Publicaciones de Oferta (Marketplace) |
-| **Actor Principal** | Comerciante (Comprador) |
-| **Propósito** | Explorar, buscar y filtrar ofertas de laptops y tabletas disponibles, evaluando su compatibilidad con el plan de estudios del comprador. |
-| **Precondiciones** | La plataforma debe estar en ejecución; se recomienda inicio de sesión para visualización de badges personalizados. |
-| **Flujo Principal** | 1. El usuario ingresa a la pestaña principal **"Explorar Ofertas"**.<br/>2. El sistema carga las publicaciones activas ordenadas cronológicamente.<br/>3. Para cada equipo, el sistema calcula y exhibe:<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Tarjeta con foto, tipo de equipo, marca y condición.<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Chips de hardware clave: Procesador, RAM en GB, Almacenamiento y GPU.<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Porcentaje de afinidad (*Match*) y badge según el plan de estudios de la carrera del usuario.<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Precio en moneda nacional (MXN).<br/>4. El usuario puede refinar los resultados mediante:<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Campo de búsqueda por texto (filtra por marca, modelo o procesador en tiempo real).<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Selector de tipo (Todos, Laptop, Tableta).<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Rango de presupuesto máximo interactivo (Slider MXN).<br/>&nbsp;&nbsp;&nbsp;&nbsp;• Casilla de verificación: *"Filtrar sólo alta compatibilidad (>=80%)"*.<br/>5. Al hacer clic en **"Ver Detalle"**, el sistema abre un modal accesible con la ficha técnica desglosada, justificación curricular y botón de contacto directo por WhatsApp con el vendedor. |
-| **Postcondiciones** | El usuario identifica equipos óptimos para su carga académica y puede contactar al vendedor dentro de la comunidad ESCOM. |
+Los filtros se envían como parámetros de `GET /api/publications` y se combinan con **Y**. El catálogo siempre excluye ofertas con estado distinto de `Activa`.
 
----
+| # | Filtro | Control | Valores | Parámetro | Campo evaluado | Criterio |
+| :-: | :--- | :--- | :--- | :--- | :--- | :--- |
+| F-01 | Búsqueda por texto | Campo de búsqueda | Texto libre | `search` | `title`, `brand`, `model`, `processor`, `description` | Contiene (sin distinguir mayúsculas) |
+| F-02 | Tipo de equipo | Lista | Laptop, Tableta | `device_type` | `device_type` | Igual a |
+| F-03 | Marca | Lista dinámica | Marcas con ofertas activas | `brand` | `brand` | Igual a |
+| F-04 | Condición | Lista | Nuevo, Como nuevo, Buen estado, Con detalles | `condition` | `condition` | Igual a |
+| F-05 | RAM mínima | Lista | 4, 8, 12, 16, 24, 32 GB | `min_ram` | `ram_gb` | Mayor o igual |
+| F-06 | Almacenamiento mínimo | Lista | 128 GB, 256 GB, 512 GB, 1 TB | `min_storage` | `storage_gb` | Mayor o igual |
+| F-07 | Tipo de disco | Lista | SSD NVMe, SSD SATA, HDD, eMMC | `storage_type` | `storage_type` | Igual a |
+| F-08 | Tarjeta gráfica | Lista | Dedicada, Integrada | `gpu_type` | `gpu` | Integrada si es nula o contiene «integrada», «intel iris», «intel uhd», «vega» o «radeon graphics» |
+| F-09 | Precio mínimo | Campo numérico | MXN | `min_price` | `price` | Mayor o igual |
+| F-10 | Precio máximo | Campo numérico | MXN | `max_price` | `price` | Menor o igual |
+| F-11 | Vendedor con correo IPN | Casilla | Sí / No | `ipn_sellers_only` | `users.es_institucional` | Verdadero |
+| F-12 | Compatibilidad con mi carrera | Botón | Activado / Desactivado | `only_compatible` | Puntaje CBF | Mayor o igual a 80 % |
+| F-13 | Ordenar por | Lista | Más recientes, Precio menor a mayor, Precio mayor a menor, Mayor compatibilidad | `sort_by` | `created_at`, `price`, puntaje CBF | Orden |
 
-### Caso de Uso CU-05: Filtrar y Ordenar Publicaciones de Oferta
-
-| Campo | Descripción |
-| :--- | :--- |
-| **Identificador** | **CU-05** |
-| **Nombre** | Filtrar y Ordenar Publicaciones de Oferta |
-| **Actor Principal** | Comerciante (Comprador) |
-| **Relación** | *Extiende* a CU-04 (Consultar Publicaciones de Oferta) |
-| **Propósito** | Reducir el catálogo a los equipos que cumplen con las características técnicas, comerciales y de compatibilidad que el comprador necesita. |
-| **Precondiciones** | Existen publicaciones con estatus `Activa`. Para el filtro de compatibilidad, el usuario debe tener carrera y semestre registrados. |
-| **Flujo Principal** | 1. El usuario se encuentra en la página principal.<br/>2. Captura texto en el buscador o selecciona uno o más filtros del catálogo (tabla de filtros).<br/>3. El sistema consulta las publicaciones activas aplicando todos los filtros seleccionados de forma combinada (operador lógico Y).<br/>4. El sistema ordena el resultado según el criterio elegido.<br/>5. El sistema actualiza el listado y muestra el número de ofertas encontradas y la cantidad de filtros activos.<br/>6. El usuario puede presionar **"Limpiar"** para restablecer todos los filtros. |
-| **Flujos Alternos / Errores** | **3a. Sin resultados:** El sistema muestra el mensaje "No se encontraron publicaciones" y ofrece restablecer los filtros.<br/>**3b. Perfil incompleto:** Si activa *Compatibilidad con mi carrera* sin carrera y semestre, el sistema lo impide e indica que debe completar su perfil.<br/>**3c. Rango de precio inválido:** Si el precio mínimo es mayor al máximo, el sistema devuelve una lista vacía. |
-| **Postcondiciones** | El catálogo refleja únicamente las ofertas que cumplen todos los criterios elegidos. |
-
-#### Catálogo de filtros
-
-| # | Filtro | Control | Valores | Campo evaluado | Criterio |
-| :-: | :--- | :--- | :--- | :--- | :--- |
-| F-01 | Búsqueda por texto | Campo de búsqueda | Texto libre | `title`, `brand`, `model`, `processor`, `description` | Contiene (sin distinguir mayúsculas) |
-| F-02 | Tipo de equipo | Lista | Laptop, Tableta | `device_type` | Igual a |
-| F-03 | Marca | Lista dinámica | Marcas con ofertas activas | `brand` | Igual a |
-| F-04 | Condición | Lista | Nuevo, Como nuevo, Buen estado, Con detalles | `condition` | Igual a |
-| F-05 | RAM mínima | Lista | 4, 8, 12, 16, 24, 32 GB | `ram_gb` | Mayor o igual a |
-| F-06 | Almacenamiento mínimo | Lista | 128 GB, 256 GB, 512 GB, 1 TB | `storage_gb` | Mayor o igual a |
-| F-07 | Tipo de disco | Lista | SSD NVMe, SSD SATA, HDD, eMMC | `storage_type` | Igual a |
-| F-08 | Tarjeta gráfica | Lista | Dedicada, Integrada | `gpu` | Dedicada: no contiene términos de gráficos integrados |
-| F-09 | Precio mínimo | Campo numérico | MXN | `price` | Mayor o igual a |
-| F-10 | Precio máximo | Campo numérico | MXN | `price` | Menor o igual a |
-| F-11 | Vendedor con correo IPN | Casilla | Sí / No | `users.es_institucional` | Verdadero |
-| F-12 | Compatibilidad con mi carrera | Botón | Activado / Desactivado | Puntaje CBF | Mayor o igual a 80 % |
-| F-13 | Ordenar por | Lista | Más recientes, Precio ascendente, Precio descendente, Mayor compatibilidad | `created_at`, `price`, puntaje CBF | Orden |
-
-**Regla adicional:** el catálogo siempre excluye publicaciones con estatus distinto de `Activa`.
-
-**Consulta de ejemplo:**
+Ejemplo:
 
 ```
 GET /api/publications?device_type=Laptop&min_ram=16&gpu_type=dedicada&max_price=20000&sort_by=precio_asc
@@ -152,88 +270,58 @@ GET /api/publications?device_type=Laptop&min_ram=16&gpu_type=dedicada&max_price=
 
 ---
 
-## 4. Esquema de Base de Datos Relacional (PostgreSQL)
+## 6. Algoritmo de compatibilidad (línea base CBF)
 
-> El diccionario de datos completo y el script del esquema están en [`docs/base_de_datos`](docs/base_de_datos/DOCUMENTACION_BASE_DE_DATOS.md).
+El motor evalúa la pareja *(especificaciones del equipo, perfil del comprador)* contra las exigencias del plan de estudios 2020. Una GPU se considera **dedicada** si su descripción no contiene términos de gráficos integrados; los procesadores Apple M1 a M4 se tratan como aceleración gráfica equivalente.
 
-El modelo de datos implementado en SQLAlchemy refleja la arquitectura de tres capas:
+| Carrera | Condición | Puntaje | Etiqueta |
+| :--- | :--- | :-: | :--- |
+| **IIA** | GPU dedicada o Apple M y RAM ≥ 16 GB | 96 % | Altamente compatible con IIA |
+| | RAM ≥ 16 GB | 83 % | Compatible para fundamentos de IA |
+| | RAM ≥ 8 GB | 72 % | Aceptable para primeros semestres |
+| | Otro caso | 58 % | No recomendado para IA |
+| **ISC** | RAM ≥ 16 GB y disco SSD | 95 % | Altamente compatible con ISC |
+| | RAM ≥ 8 GB | 85 % | Compatible con plan ISC |
+| | Otro caso | 65 % | Básico para ISC |
+| **LCD** | RAM ≥ 16 GB y disco SSD | 94 % | Altamente compatible con LCD |
+| | RAM ≥ 8 GB | 80 % | Compatible con análisis básico |
+| | Otro caso | 60 % | Rendimiento limitado para LCD |
+| **ISISA** | GPU dedicada o Apple M y RAM ≥ 16 GB | 95 % | Altamente compatible con ISISA |
+| | RAM ≥ 8 GB | 78 % | Compatible para diseño ligero |
+| | Otro caso | 60 % | Limitado para CAD |
+| **Sin carrera** (docente, PAAE, externo o alumno sin perfil) | RAM ≥ 16 GB | 90 % | Equipo de alto rendimiento |
+| | RAM ≥ 8 GB | 82 % | Equipo balanceado |
+| | Otro caso | 70 % | Gama básica |
 
-```mermaid
-erDiagram
-    USERS ||--o{ SESSIONS : "inicia"
-    USERS ||--o{ PUBLICATIONS : "publica"
-
-    USERS {
-        int id PK
-        string name "Nombre completo"
-        string email UK "Correo normalizado"
-        string password_hash "scrypt hash"
-        string role "Alumno, Docente, PAAE, Externo"
-        string career "ISC, IIA, LCD, ISISA"
-        string semester "1° a 8° semestre"
-        string interests "Intereses académicos"
-        string phone "Teléfono de contacto"
-        timestamp created_at
-    }
-
-    SESSIONS {
-        string token_hash PK "SHA-256 del token"
-        int user_id FK
-        timestamp expires_at
-    }
-
-    PUBLICATIONS {
-        int id PK
-        int seller_id FK
-        string title "Título de la oferta"
-        string device_type "Laptop o Tableta"
-        string brand "Marca"
-        string model "Modelo"
-        string condition "Nuevo, Usado, etc."
-        string processor "CPU"
-        int ram_gb "Capacidad RAM"
-        int storage_gb "Capacidad Disco"
-        string storage_type "SSD NVMe, SSD SATA, HDD, eMMC"
-        string gpu "Tarjeta gráfica"
-        string screen_size "Pulgadas de pantalla"
-        string battery_condition "Salud de batería"
-        float price "Precio en MXN"
-        text description "Descripción de la oferta"
-        string image_url "URL de imagen"
-        string contact_phone "Contacto WhatsApp"
-        string status "Activa, Pausada, Vendida"
-        timestamp created_at
-        timestamp updated_at
-    }
-```
+Cada puntaje se acompaña de un texto explicativo que se muestra en la tarjeta y en el detalle.
 
 ---
 
-## 5. Algoritmo de Compatibilidad de Perfil (Línea Base CBF - Sprint 5)
+## 7. API REST
 
-El motor de filtrado evalúa la tupla `(Hardware_Specs, Perfil_Estudiante)` contrastándola contra las exigencias del Plan de Estudios 2020 de la ESCOM:
+Documentación interactiva: `http://localhost:8000/docs`.
 
-| Carrera | Requerimientos Críticos de Hardware | Criterio de Puntuación (Match %) |
-| :--- | :--- | :--- |
-| **Ingeniería en Inteligencia Artificial (IIA)** | GPU dedicada con núcleos de cómputo tensorial / CUDA o Apple Silicon M-Series, memoria RAM >= 16 GB, SSD. | • GPU Dedicada/Apple M + RAM >= 16 GB: **96% (Excelente para Deep Learning)**<br/>• RAM >= 16 GB con GPU integrada: **83% (Adecuado para fundamentos)**<br/>• RAM = 8 GB: **72% (Requiere ampliación)** |
-| **Ingeniería en Sistemas Computacionales (ISC)** | Memoria RAM >= 16 GB (para virtualización, Docker, emuladores Android/iOS), CPU multinúcleo y almacenamiento SSD NVMe. | • RAM >= 16 GB + SSD: **95% (Excelente para desarrollo y contenedores)**<br/>• RAM = 8 GB + SSD: **85% (Bueno para materias troncales)**<br/>• RAM < 8 GB: **65% (Limitado)** |
-| **Licenciatura en Ciencia de Datos (LCD)** | Memoria RAM elevada (16 GB - 32 GB) para DataFrames en memoria (Pandas/Spark), CPU veloz para minería y cálculo matricial. | • RAM >= 16 GB + SSD: **94% (Óptimo para Big Data y análisis)**<br/>• RAM = 8 GB: **80% (Estadística básica)** |
-| **Ingeniería en Sistemas Automotrices (ISISA)** | GPU dedicada para aceleración 3D, software CAD/CAM (SolidWorks, AutoCAD, CATIA) y simulación física de mecanismos. | • GPU Dedicada + RAM >= 16 GB: **95% (Apto para modelado CAD 3D)**<br/>• GPU Integrada: **75% (Diseño ligero y ciencias básicas)** |
+| Método | Endpoint | Descripción | Sesión |
+| :-: | :--- | :--- | :-: |
+| `GET` | `/` | Estado del servicio | No |
+| `POST` | `/auth/register` | Crea la cuenta y abre sesión | No |
+| `POST` | `/auth/verify-email?token=` | Confirma el correo | No |
+| `POST` | `/auth/login` | Inicia sesión | No |
+| `GET` | `/auth/me` | Usuario de la sesión actual | Sí |
+| `PUT` | `/auth/profile` | Actualiza carrera, semestre, intereses o teléfono | Sí |
+| `DELETE` | `/auth/profile` | Restablece carrera, semestre e intereses | Sí |
+| `POST` | `/auth/logout` | Cierra la sesión | No |
+| `GET` | `/api/filters/options` | Opciones para los filtros (marcas, rango de precios) | No |
+| `GET` | `/api/publications` | Lista ofertas activas con filtros F-01 a F-13 | Opcional |
+| `GET` | `/api/publications/{id}` | Detalle de una oferta | Opcional |
+| `GET` | `/api/publications/{id}/contact` | Contacto del vendedor | Sí |
+| `POST` | `/api/publications` | Crea una oferta | Sí |
+| `PUT` | `/api/publications/{id}` | Edita una oferta propia | Sí |
+| `PATCH` | `/api/publications/{id}/status` | Cambia el estado de una oferta propia | Sí |
+| `DELETE` | `/api/publications/{id}` | Elimina una oferta propia | Sí |
+| `GET` | `/api/my-publications` | Ofertas del usuario | Sí |
+| `GET` | `/api/favorites` | Favoritos del usuario | Sí |
+| `POST` | `/api/favorites/{id}` | Agrega a favoritos | Sí |
+| `DELETE` | `/api/favorites/{id}` | Quita de favoritos | Sí |
 
----
-
-## 6. Endpoints de la API REST
-
-| Método | Endpoint | Descripción | Autenticación |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/auth/register` | Crea una cuenta con rol, carrera, semestre e intereses | No requerida |
-| `POST` | `/auth/login` | Inicia sesión y genera cookie `HttpOnly` | No requerida |
-| `GET` | `/auth/me` | Obtiene los datos del usuario conectado | Requerida (Cookie) |
-| `POST` | `/auth/logout` | Invalida el token y limpia la cookie | Requerida (Cookie) |
-| `PUT` | `/auth/profile` | Actualiza carrera, semestre, intereses o teléfono | Requerida (Cookie) |
-| `GET` | `/api/publications` | Lista ofertas activas con filtros F-01 a F-13 y puntaje CBF | Opcional (calcula con usuario si existe) |
-| `GET` | `/api/filters/options` | Opciones disponibles para los filtros (marcas, rango de precios) | No requerida |
-| `GET` | `/api/publications/{id}` | Ficha técnica y datos de contacto de una oferta | Opcional |
-| `POST` | `/api/publications` | Crea una nueva publicación de laptop/tableta | Requerida (Cookie) |
-| `GET` | `/api/my-publications` | Lista las ofertas creadas por el usuario activo | Requerida (Cookie) |
-| `DELETE` | `/api/publications/{id}` | Elimina una oferta propia del vendedor | Requerida (Cookie) |
+Los parámetros, cuerpos y códigos de respuesta se detallan en la [documentación técnica](docs/DOCUMENTACION_TECNICA.md#5-referencia-de-la-api).
