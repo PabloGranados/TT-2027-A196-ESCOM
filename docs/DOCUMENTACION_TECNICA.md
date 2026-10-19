@@ -186,13 +186,13 @@ Cuerpo de `POST/PUT /api/publications` (`PublicationCreate`):
 
 | Componente | Responsabilidad |
 | :--- | :--- |
-| `App` | Estado global: usuario, vista activa, publicaciones, filtros y modal. Restaura la sesión con `/auth/me`. |
+| `App` | Estado global: usuario, vista activa, publicaciones, publicación en edición, filtros y modal. Restaura la sesión con `/auth/me`. |
 | `AuthScreen` | Inicio de sesión, registro, confirmación de correo y botón de cuenta demo opcional. |
-| `CreatePublicationView` | Formulario de tres bloques para crear ofertas. |
-| `MyPublicationsView` | Listado y eliminación de las ofertas propias. |
+| `CreatePublicationView` | Formulario de tres bloques para crear o editar ofertas (`POST /api/publications` y `PUT /api/publications/{id}`). |
+| `MyPublicationsView` | Listado, edición y eliminación de las ofertas propias. |
 | `FavoritesView` | Listado y retiro de favoritos. |
-| `ProfileView` | Consulta, edición y restablecimiento del perfil académico. |
-| `PublicationModal` | Ficha técnica, compatibilidad, contacto, favoritos y acciones del propietario. |
+| `ProfileView` | Consulta, edición, restablecimiento del perfil académico y confirmación de correo pendiente. |
+| `PublicationModal` | Ficha técnica, compatibilidad, contacto, favoritos y acciones del propietario (editar, cambiar estado y eliminar). |
 
 Detalles de implementación:
 
@@ -203,7 +203,7 @@ Detalles de implementación:
 
 ## 8. Base de datos y migraciones
 
-El esquema se crea con `Base.metadata.create_all`. Como esa función no agrega columnas a tablas ya existentes, el arranque ejecuta sentencias `ALTER TABLE users ADD COLUMN IF NOT EXISTS …` para volúmenes creados con versiones anteriores. Para cambios futuros de esquema se recomienda adoptar Alembic. Más detalle en la [documentación de la base de datos](base_de_datos/DOCUMENTACION_BASE_DE_DATOS.md).
+El esquema se crea con `Base.metadata.create_all`. Como esa función no agrega columnas a tablas ya existentes, el arranque ejecuta sentencias `ALTER TABLE users ADD COLUMN IF NOT EXISTS …` para volúmenes creados con versiones anteriores (solo cuando el motor es PostgreSQL). Para cambios futuros de esquema se recomienda adoptar Alembic. Más detalle en la [documentación de la base de datos](base_de_datos/DOCUMENTACION_BASE_DE_DATOS.md).
 
 ## 9. Despliegue y operación
 
@@ -227,14 +227,12 @@ docker compose down               # detener conservando datos
 
 | Tema | Situación actual |
 | :--- | :--- |
-| Correo de verificación | No se envía correo; el token se devuelve en la respuesta del registro. |
+| Correo de verificación | No se envía correo por SMTP; el token se devuelve en la respuesta del registro y puede confirmarse en el registro o desde *Mi perfil*. |
 | Obsolescencia (RN-08) | Se evalúa al iniciar el backend, no de forma periódica. |
-| Edición de ofertas | Disponible solo en la API. |
-| Valoraciones de vendedores | Pendiente; solo existe la bandera `invite_rating`. |
+| Valoraciones de vendedores | Pendiente; solo existe la bandera `invite_rating` al vender la última pieza. |
 | Cuenta demo | Su contraseña llega al bundle de Vite; usar únicamente en desarrollo local. |
 | Protección contra fuerza bruta | No hay límite de intentos de inicio de sesión. |
 | Migraciones | Mediante `ALTER TABLE` manual; sin Alembic. |
-| Pruebas automatizadas | No hay suite; la verificación es manual y con lint/build (sección 12). |
 | Obsolescencia visual del catálogo | Las ofertas `Vendida` u `Obsoleta` no aparecen en *Explorar*, solo en *Mis publicaciones*. |
 
 ## 11. Generación de los PDF

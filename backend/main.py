@@ -371,6 +371,9 @@ def has_complete_profile(user: User) -> bool:
 # ----------------------------------------------------
 # MOTOR CBF (LÍNEA BASE - SPRINT 5)
 # ----------------------------------------------------
+GPU_INTEGRADA_TERMS = ["integrada", "intel iris", "intel uhd", "vega", "radeon graphics", "adreno"]
+
+
 def evaluate_compatibility(pub: Publication, user: Optional[User]) -> tuple[int, str, str]:
     if not user or not user.career or user.role != "Alumno":
         if pub.ram_gb >= 16:
@@ -381,7 +384,7 @@ def evaluate_compatibility(pub: Publication, user: Optional[User]) -> tuple[int,
 
     career = user.career.upper()
     has_dedicated_gpu = pub.gpu and not any(
-        term in pub.gpu.lower() for term in ["integrada", "intel iris", "intel uhd", "vega", "radeon graphics básica"]
+        term in pub.gpu.lower() for term in GPU_INTEGRADA_TERMS
     )
     is_m_series = any(m in pub.processor.lower() for m in ["m1", "m2", "m3", "m4"])
 
@@ -491,17 +494,18 @@ def initialize_database():
         try:
             Base.metadata.create_all(engine)
             # Migraciones directas para tablas existentes en PostgreSQL
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'Alumno'"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS career VARCHAR(100)"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS semester VARCHAR(50)"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS interests VARCHAR(500)"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(100)"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS es_institucional BOOLEAN DEFAULT FALSE"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
-                conn.commit()
+            if not DATABASE_URL.startswith("sqlite"):
+                with engine.connect() as conn:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'Alumno'"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS career VARCHAR(100)"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS semester VARCHAR(50)"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS interests VARCHAR(500)"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_token VARCHAR(100)"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS es_institucional BOOLEAN DEFAULT FALSE"))
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()"))
+                    conn.commit()
 
             # Actualizar por obsolescencia: publicaciones activas con más de 30 días pasan a "Obsoleta" (RN-08)
             with SessionLocal() as db:
@@ -801,9 +805,6 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 # ----------------------------------------------------
 
 # CU: Buscar Publicaciones de Oferta (Pág. 16, 17, 18, 19, 20)
-GPU_INTEGRADA_TERMS = ["integrada", "intel iris", "intel uhd", "vega", "radeon graphics"]
-
-
 @app.get("/api/filters/options")
 def get_filter_options(db: Session = Depends(get_db)):
     """Opciones dinámicas para los filtros del catálogo (marcas y rango de precios)."""
@@ -1091,6 +1092,8 @@ def update_publication_status(
         # Paso 5: Si el stock era 1 antes del cambio a "Vendida", ofrece invitar a valorar («extend»)
         if prev_stock == 1:
             invite_rating = True
+    elif payload.status == "Activa" and pub.stock == 0:
+        pub.stock = 1
 
     db.commit()
     db.refresh(pub)
@@ -1160,6 +1163,9 @@ def add_favorite(
     db: Session = Depends(get_db),
 ):
     user = current_user(request, db)
+    pub = db.scalar(select(Publication).where(Publication.id == publication_id))
+    if not pub:
+        raise HTTPException(status_code=404, detail="Publicación no encontrada")
     existing = db.scalar(
         select(Favorite).where(Favorite.user_id == user.id, Favorite.publication_id == publication_id)
     )

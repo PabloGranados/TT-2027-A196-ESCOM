@@ -29,7 +29,7 @@ Este documento especifica los casos de uso, las reglas de negocio, los filtros y
 | CU-10 | Consultar mis publicaciones | Vendedor | 12 | Sí | Sí |
 | CU-11 | Actualizar estado de una publicación | Vendedor | 14 | Sí | Sí |
 | CU-12 | Eliminar publicación | Vendedor | 11 | Sí | Sí |
-| CU-13 | Editar publicación | Vendedor | 10 | Sí | No (solo API) |
+| CU-13 | Editar publicación | Vendedor | 10 | Sí | Sí |
 | CU-14 | Gestionar favoritos | Comprador | 42-44 | Sí | Sí |
 | CU-15 | Cerrar sesión | Usuario registrado | — | Sí | Sí |
 
@@ -183,14 +183,14 @@ flowchart LR
 | Campo | Descripción |
 | :--- | :--- |
 | **Actor** | Vendedor |
-| **Flujo principal** | 1. El usuario abre **Mis publicaciones**.<br/>2. El sistema lista todas sus ofertas (cualquier estado), de la más reciente a la más antigua, con estado y existencias.<br/>3. Desde cada tarjeta puede ver el detalle o eliminar la oferta; desde el detalle puede cambiar su estado. |
+| **Flujo principal** | 1. El usuario abre **Mis publicaciones**.<br/>2. El sistema lista todas sus ofertas (cualquier estado), de la más reciente a la más antigua, con estado y existencias.<br/>3. Desde cada tarjeta puede ver el detalle, editar o eliminar la oferta; desde el detalle puede cambiar su estado o editarla. |
 
 ### CU-11 · Actualizar estado de una publicación
 
 | Campo | Descripción |
 | :--- | :--- |
 | **Actor** | Vendedor propietario |
-| **Flujo principal** | 1. En el detalle de su oferta elige **Marcar como vendida** o **Reactivar oferta**.<br/>2. El sistema actualiza el estado (`Activa`, `Vendida` u `Obsoleta`) y la fecha de modificación.<br/>3. Si el estado es `Vendida`, las existencias pasan a 0. Si había una sola pieza, la respuesta incluye `invite_rating = true`. |
+| **Flujo principal** | 1. En el detalle de su oferta elige **Marcar como vendida** o **Reactivar oferta**.<br/>2. El sistema actualiza el estado (`Activa`, `Vendida` u `Obsoleta`) y la fecha de modificación.<br/>3. Si el estado es `Vendida`, las existencias pasan a 0 (si había una sola pieza, la respuesta incluye `invite_rating = true`). Si se reactiva a `Activa` con existencias en 0, el stock se restablece a 1. |
 | **Flujos alternos** | **1a. No es el propietario:** HTTP 403.<br/>**1b. Oferta inexistente:** HTTP 404. |
 
 ### CU-12 · Eliminar publicación
@@ -206,15 +206,15 @@ flowchart LR
 | Campo | Descripción |
 | :--- | :--- |
 | **Actor** | Vendedor propietario |
-| **Flujo principal** | `PUT /api/publications/{id}` recibe la ficha completa, valida (RN-04), actualiza los campos y la fecha de modificación. |
-| **Estado** | Disponible en la API; la pantalla de edición queda pendiente. |
+| **Flujo principal** | 1. En **Mis publicaciones** o en el modal de detalle de su oferta, el vendedor presiona **Editar**.<br/>2. La vista de publicación precarga los datos actuales del equipo.<br/>3. Al guardar cambios, `PUT /api/publications/{id}` valida la ficha técnica (RN-04), actualiza los campos y registra la nueva fecha de modificación (`updated_at`). |
+| **Flujos alternos** | **3a. No es el propietario:** HTTP 403.<br/>**3b. Oferta inexistente:** HTTP 404. |
 
 ### CU-14 · Gestionar favoritos
 
 | Campo | Descripción |
 | :--- | :--- |
 | **Actor** | Comprador |
-| **Flujo principal** | 1. En el detalle de una oferta ajena, el usuario elige **Guardar en favoritos** (o quitarla).<br/>2. En **Favoritos** consulta la lista y puede **Quitar** elementos.<br/>3. La operación de agregar es idempotente: no duplica el favorito. |
+| **Flujo principal** | 1. En el detalle de una oferta ajena, el usuario elige **Guardar en favoritos** (o quitarla).<br/>2. En **Favoritos** consulta la lista y puede **Quitar** elementos.<br/>3. La operación de agregar es idempotente: no duplica el favorito y devuelve HTTP 404 si la publicación no existe. |
 
 ### CU-15 · Cerrar sesión
 
@@ -255,7 +255,7 @@ Los filtros se envían como parámetros de `GET /api/publications` y se combinan
 | F-05 | RAM mínima | Lista | 4, 8, 12, 16, 24, 32 GB | `min_ram` | `ram_gb` | Mayor o igual |
 | F-06 | Almacenamiento mínimo | Lista | 128 GB, 256 GB, 512 GB, 1 TB | `min_storage` | `storage_gb` | Mayor o igual |
 | F-07 | Tipo de disco | Lista | SSD NVMe, SSD SATA, HDD, eMMC | `storage_type` | `storage_type` | Igual a |
-| F-08 | Tarjeta gráfica | Lista | Dedicada, Integrada | `gpu_type` | `gpu` | Integrada si es nula o contiene «integrada», «intel iris», «intel uhd», «vega» o «radeon graphics» |
+| F-08 | Tarjeta gráfica | Lista | Dedicada, Integrada | `gpu_type` | `gpu` | Integrada si es nula o contiene «integrada», «intel iris», «intel uhd», «vega», «radeon graphics» o «adreno» |
 | F-09 | Precio mínimo | Campo numérico | MXN | `min_price` | `price` | Mayor o igual |
 | F-10 | Precio máximo | Campo numérico | MXN | `max_price` | `price` | Menor o igual |
 | F-11 | Vendedor con correo IPN | Casilla | Sí / No | `ipn_sellers_only` | `users.es_institucional` | Verdadero |

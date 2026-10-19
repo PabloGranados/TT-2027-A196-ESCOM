@@ -380,6 +380,7 @@ function PublicationModal({
   currentUser,
   onClose,
   onStatusChange,
+  onEdit,
   onDelete,
   onToggleFavorite,
 }) {
@@ -510,6 +511,15 @@ function PublicationModal({
               <div className="owner-box">
                 <span className="box-title">Opciones de publicación</span>
                 <div className="owner-buttons">
+                  {onEdit && (
+                    <button
+                      type="button"
+                      className="secondary-sm"
+                      onClick={() => onEdit(publication)}
+                    >
+                      Editar
+                    </button>
+                  )}
                   {publication.status === 'Activa' && (
                     <button
                       type="button"
@@ -583,27 +593,28 @@ function PublicationModal({
 }
 
 // =========================================================================
-// FORMULARIO DE PUBLICACIÓN DE OFERTA
+// FORMULARIO DE PUBLICACIÓN DE OFERTA (CREACIÓN Y EDICIÓN)
 // =========================================================================
-function CreatePublicationView({ onPublished, onCancel }) {
+function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
+  const isEditing = Boolean(initialData && initialData.id)
   const [form, setForm] = useState({
-    title: '',
-    device_type: 'Laptop',
-    brand: '',
-    model: '',
-    condition: 'Usado - Como nuevo',
-    processor: '',
-    ram_gb: 16,
-    storage_gb: 512,
-    storage_type: 'SSD NVMe',
-    gpu: 'Integrada',
-    screen_size: '15.6"',
-    battery_condition: 'Buen estado',
-    price: '',
-    stock: 1,
-    description: '',
-    contact_phone: '',
-    image_url: '',
+    title: initialData?.title || '',
+    device_type: initialData?.device_type || 'Laptop',
+    brand: initialData?.brand || '',
+    model: initialData?.model || '',
+    condition: initialData?.condition || 'Usado - Como nuevo',
+    processor: initialData?.processor || '',
+    ram_gb: initialData?.ram_gb || 16,
+    storage_gb: initialData?.storage_gb || 512,
+    storage_type: initialData?.storage_type || 'SSD NVMe',
+    gpu: initialData?.gpu || 'Integrada',
+    screen_size: initialData?.screen_size || '15.6"',
+    battery_condition: initialData?.battery_condition || 'Buen estado',
+    price: initialData?.price ?? '',
+    stock: initialData?.stock || 1,
+    description: initialData?.description || '',
+    contact_phone: initialData?.contact_phone || '',
+    image_url: initialData?.image_url || '',
   })
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
@@ -629,11 +640,14 @@ function CreatePublicationView({ onPublished, onCancel }) {
         contact_phone: form.contact_phone.trim() || null,
       }
 
-      const created = await apiRequest('/api/publications', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      })
-      onPublished(created)
+      const saved = await apiRequest(
+        isEditing ? `/api/publications/${initialData.id}` : '/api/publications',
+        {
+          method: isEditing ? 'PUT' : 'POST',
+          body: JSON.stringify(payload),
+        }
+      )
+      onPublished(saved)
     } catch (err) {
       setFormError(err.message)
     } finally {
@@ -644,9 +658,11 @@ function CreatePublicationView({ onPublished, onCancel }) {
   return (
     <section className="panel form-panel">
       <header className="panel-header">
-        <h2>Publicar laptop o tableta</h2>
+        <h2>{isEditing ? 'Editar publicación' : 'Publicar laptop o tableta'}</h2>
         <p className="panel-subtitle">
-          Ingresa los detalles técnicos de tu equipo para que los compradores puedan evaluar su compatibilidad.
+          {isEditing
+            ? 'Actualiza las especificaciones, precio o detalles de entrega de tu equipo.'
+            : 'Ingresa los detalles técnicos de tu equipo para que los compradores puedan evaluar su compatibilidad.'}
         </p>
       </header>
 
@@ -869,7 +885,13 @@ function CreatePublicationView({ onPublished, onCancel }) {
 
         <div className="form-actions-bar">
           <button type="submit" className="primary" disabled={submitting}>
-            {submitting ? 'Publicando…' : 'Publicar oferta'}
+            {submitting
+              ? isEditing
+                ? 'Guardando…'
+                : 'Publicando…'
+              : isEditing
+                ? 'Guardar cambios'
+                : 'Publicar oferta'}
           </button>
           <button type="button" className="secondary" onClick={onCancel}>
             Cancelar
@@ -883,7 +905,7 @@ function CreatePublicationView({ onPublished, onCancel }) {
 // =========================================================================
 // MIS PUBLICACIONES
 // =========================================================================
-function MyPublicationsView({ onSelectPub, onCreateNew, onDeletePub }) {
+function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub }) {
   const [myPubs, setMyPubs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -973,6 +995,11 @@ function MyPublicationsView({ onSelectPub, onCreateNew, onDeletePub }) {
                     <button type="button" className="secondary-sm" onClick={() => onSelectPub(pub)}>
                       Detalles
                     </button>
+                    {onEditPub && (
+                      <button type="button" className="secondary-sm" onClick={() => onEditPub(pub)}>
+                        Editar
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="danger-sm"
@@ -1109,6 +1136,20 @@ function ProfileView({ user, onProfileUpdated }) {
     }
   }
 
+  const handleVerifyEmail = async () => {
+    if (!user.verification_token) return
+    try {
+      const updated = await apiRequest(
+        `/auth/verify-email?token=${encodeURIComponent(user.verification_token)}`,
+        { method: 'POST' }
+      )
+      onProfileUpdated(updated)
+      setMsg('Correo verificado con éxito.')
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
   return (
     <section className="panel profile-section">
       <header className="panel-header">
@@ -1212,8 +1253,18 @@ function ProfileView({ user, onProfileUpdated }) {
               </div>
             ) : (
               <div className="badge-standard">
-                Cuenta estándar
+                {user.is_verified ? 'Cuenta estándar verificada' : 'Cuenta pendiente de verificar'}
               </div>
+            )}
+            {!user.is_verified && user.verification_token && (
+              <button
+                type="button"
+                className="secondary-sm"
+                style={{ marginTop: '0.75rem', width: '100%' }}
+                onClick={handleVerifyEmail}
+              >
+                Confirmar correo electrónico
+              </button>
             )}
             <p className="sidebar-hint">
               {user.has_complete_profile
@@ -1240,6 +1291,7 @@ function App() {
   const [publications, setPublications] = useState([])
   const [loadingPubs, setLoadingPubs] = useState(false)
   const [selectedPub, setSelectedPub] = useState(null)
+  const [editingPub, setEditingPub] = useState(null)
 
   // Filtros
   const [filters, setFilters] = useState(EMPTY_FILTERS)
@@ -1349,10 +1401,18 @@ function App() {
         await apiRequest(`/api/favorites/${pub.id}`, { method: 'POST' })
       }
       fetchPublications()
-      setSelectedPub(null)
+      setSelectedPub((prev) =>
+        prev && prev.id === pub.id ? { ...prev, is_favorite: !pub.is_favorite } : prev
+      )
     } catch (err) {
       alert(err.message)
     }
+  }
+
+  const startEditingPub = (pub) => {
+    setSelectedPub(null)
+    setEditingPub(pub)
+    setActiveView('publicar')
   }
 
   if (authLoading) {
@@ -1394,7 +1454,10 @@ function App() {
           <button
             type="button"
             className={activeView === 'publicar' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setActiveView('publicar')}
+            onClick={() => {
+              setEditingPub(null)
+              setActiveView('publicar')
+            }}
           >
             Vender equipo
           </button>
@@ -1447,7 +1510,14 @@ function App() {
                 </p>
 
                 <div className="hero-actions">
-                  <button type="button" className="primary" onClick={() => setActiveView('publicar')}>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      setEditingPub(null)
+                      setActiveView('publicar')
+                    }}
+                  >
                     + Publicar equipo
                   </button>
                   <button
@@ -1696,15 +1766,21 @@ function App() {
           </>
         )}
 
-        {/* VISTA 2: PUBLICAR OFERTA */}
+        {/* VISTA 2: PUBLICAR / EDITAR OFERTA */}
         {activeView === 'publicar' && (
           <CreatePublicationView
-            onPublished={(newPub) => {
+            key={editingPub ? `edit-${editingPub.id}` : 'create-new'}
+            initialData={editingPub}
+            onPublished={(savedPub) => {
               fetchPublications()
-              setSelectedPub(newPub)
+              setEditingPub(null)
+              setSelectedPub(savedPub)
               setActiveView('inicio')
             }}
-            onCancel={() => setActiveView('inicio')}
+            onCancel={() => {
+              setEditingPub(null)
+              setActiveView('inicio')
+            }}
           />
         )}
 
@@ -1712,7 +1788,11 @@ function App() {
         {activeView === 'mis-publicaciones' && (
           <MyPublicationsView
             onSelectPub={(pub) => setSelectedPub(pub)}
-            onCreateNew={() => setActiveView('publicar')}
+            onCreateNew={() => {
+              setEditingPub(null)
+              setActiveView('publicar')
+            }}
+            onEditPub={startEditingPub}
             onDeletePub={handleDeletePub}
           />
         )}
@@ -1734,10 +1814,12 @@ function App() {
       {/* MODAL DETALLE */}
       {selectedPub && (
         <PublicationModal
+          key={selectedPub.id}
           publication={selectedPub}
           currentUser={user}
           onClose={() => setSelectedPub(null)}
           onStatusChange={handleStatusChange}
+          onEdit={startEditingPub}
           onDelete={handleDeletePub}
           onToggleFavorite={handleToggleFavorite}
         />

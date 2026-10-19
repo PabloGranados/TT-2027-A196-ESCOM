@@ -193,13 +193,13 @@ Para conservar una copia segura de los datos:
 
 | Parámetro | Valor |
 | :--- | :--- |
-| Host | `localhost` |
+| Host | `127.0.0.1` |
 | Puerto | `5432` |
-| Base de datos | `hardware_match_db` |
-| Usuario | `escom_user` |
-| Contraseña | `escom_password` |
+| Base de datos | `<POSTGRES_DB>` (por defecto `hardware_match_db`) |
+| Usuario | `<POSTGRES_USER>` (por defecto `escom_user`) |
+| Contraseña | `<POSTGRES_PASSWORD>` (definida en `.env`) |
 
 ```powershell
-docker exec -it escom_db psql -U escom_user -d hardware_match_db
+docker exec -it escom_db psql -U <POSTGRES_USER> -d <POSTGRES_DB>
 ```
 

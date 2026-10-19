@@ -292,3 +292,4 @@ main().catch((err) => {
   console.error('Error generando PDFs:', err)
   process.exit(1)
 })
+
