@@ -162,7 +162,6 @@ function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' })
         })
         setRegisteredUser(data)
       } else if (mode === 'forgot') {
-        // CU05: Solicitar Restablecimiento de Contraseña (IU15)
         const res = await apiRequest('/auth/forgot-password', {
           method: 'POST',
           body: JSON.stringify({ email: form.email.trim() }),
@@ -173,7 +172,6 @@ function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' })
           setForm((prev) => ({ ...prev, resetCode: res.dev_reset_code }))
         }
       } else if (mode === 'reset') {
-        // CU06: Confirmar Restablecimiento de Contraseña (IU16)
         if (form.newPassword !== form.confirmNewPassword) {
           throw new Error('La nueva contraseña y su confirmación no coinciden.')
         }
@@ -211,7 +209,6 @@ function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' })
     }
   }
 
-  // Pantalla de Verificación de Correo tras el registro (IU03 - CU02, CU03)
   if (registeredUser) {
     return (
       <main className="auth-shell">
@@ -250,7 +247,7 @@ function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' })
 
   return (
     <main className="auth-shell">
-      <section className="auth-panel panel">
+      <section className={`auth-panel panel ${mode === 'register' ? 'auth-panel-wide' : ''}`}>
         <header className="auth-header">
           <div className="brand-logo">
             <span className="brand-badge-ipn">ESCOM</span>
@@ -289,12 +286,10 @@ function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' })
         {infoMessage && <p className="success-banner" role="status">{infoMessage}</p>}
 
         {mode === 'forgot' && devResetCode && (
-          <div className="demo-box" style={{ marginBottom: '1rem' }}>
+          <div className="demo-box">
             <div className="demo-info">
-              <span className="demo-tag">Código generado (entorno local TT1)</span>
-              <p className="demo-text" style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>
-                {devResetCode}
-              </p>
+              <span className="demo-tag">Código de verificación</span>
+              <p className="demo-text code-break">{devResetCode}</p>
             </div>
             <button
               type="button"
@@ -605,7 +600,7 @@ function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' })
 }
 
 // =========================================================================
-// MODAL DE DETALLE DE LA PUBLICACIÓN (IU07 Ofertante / IU09 Interesado)
+// MODAL DE DETALLE DE LA PUBLICACIÓN
 // =========================================================================
 function PublicationModal({
   publication,
@@ -751,7 +746,7 @@ function PublicationModal({
 
             {isOwner ? (
               <div className="owner-box">
-                <span className="box-title">Opciones de administración (Ofertante · RN-10)</span>
+                <span className="box-title">Opciones de administración</span>
                 <div className="owner-buttons">
                   {onEdit && (
                     <button
@@ -807,7 +802,7 @@ function PublicationModal({
 
                 {!currentUser ? (
                   <button type="button" className="primary" onClick={onRequireLogin}>
-                    Inicia sesión para ver datos de contacto (RN-07)
+                    Inicia sesión para ver datos de contacto
                   </button>
                 ) : !contactData ? (
                   <button type="button" className="primary" onClick={loadContact}>
@@ -844,7 +839,7 @@ function PublicationModal({
 }
 
 // =========================================================================
-// FORMULARIO DE PUBLICACIÓN DE OFERTA (CREACIÓN Y EDICIÓN - IU05)
+// FORMULARIO DE PUBLICACIÓN DE OFERTA (CREACIÓN Y EDICIÓN)
 // =========================================================================
 function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
   const isEditing = Boolean(initialData && initialData.id)
@@ -904,7 +899,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
       )
       if (saved && saved.merged_duplicate) {
         alert(
-          'Se detectó una publicación propia con idénticas especificaciones y observaciones; se incrementó automáticamente su stock disponible (RN-09).'
+          'Se detectó una publicación propia con idénticas especificaciones y observaciones; se incrementó automáticamente el stock disponible.'
         )
       }
       onPublished(saved)
@@ -922,7 +917,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
         <p className="panel-subtitle">
           {isEditing
             ? 'Actualiza las especificaciones, precio o detalles de entrega de tu equipo.'
-            : 'Ingresa los detalles técnicos obligatorios (RN-04) para que los interesados evalúen su compatibilidad.'}
+            : 'Ingresa las especificaciones técnicas del equipo para que los interesados evalúen su compatibilidad.'}
         </p>
       </header>
 
@@ -994,7 +989,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
         </div>
 
         <div className="form-section">
-          <span className="section-num">2. Ficha técnica obligatoria (RN-04)</span>
+          <span className="section-num">2. Especificaciones técnicas</span>
           <div className="form-grid-2">
             <label>
               Familia / Marca de CPU
@@ -1195,7 +1190,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
 }
 
 // =========================================================================
-// MIS PUBLICACIONES (IU06 - CU14, CU15, CU16)
+// MIS PUBLICACIONES
 // =========================================================================
 function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub, onStatusChange }) {
   const [myPubs, setMyPubs] = useState([])
@@ -1243,8 +1238,9 @@ function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub, 
             Administra el estado, vigencia y stock de las ofertas que has creado.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div className="section-head-actions">
           <select
+            className="status-filter-select"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             aria-label="Filtrar por estado"
@@ -1358,7 +1354,7 @@ function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub, 
 }
 
 // =========================================================================
-// FAVORITOS (IU13 - CU29, CU30, CU31, RN-12)
+// FAVORITOS
 // =========================================================================
 function FavoritesView({ onSelectPub, onRemoveFav }) {
   const [favs, setFavs] = useState([])
@@ -1386,7 +1382,7 @@ function FavoritesView({ onSelectPub, onRemoveFav }) {
       <header className="panel-header">
         <h2>Favoritos</h2>
         <p className="panel-subtitle">
-          Publicaciones guardadas mostrando su estado y stock en vivo (RN-12).
+          Publicaciones guardadas con su estado y disponibilidad actualizados.
         </p>
       </header>
 
@@ -1402,8 +1398,7 @@ function FavoritesView({ onSelectPub, onRemoveFav }) {
             pub.unavailable ? (
               <article
                 key={pub.id}
-                className="card-item"
-                style={{ opacity: 0.65, background: '#f3f4f6' }}
+                className="card-item card-unavailable"
               >
                 <div className="card-body">
                   <span className="card-brand">{pub.brand}</span>
@@ -1429,14 +1424,7 @@ function FavoritesView({ onSelectPub, onRemoveFav }) {
             ) : (
               <article key={pub.id} className="card-item">
                 <div className="card-body">
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '0.35rem',
-                    }}
-                  >
+                  <div className="fav-card-top">
                     <span className="card-brand">
                       {pub.brand} · {pub.model}
                     </span>
@@ -1483,7 +1471,7 @@ function FavoritesView({ onSelectPub, onRemoveFav }) {
 }
 
 // =========================================================================
-// PERFIL DE USUARIO (IU04 - CU08, CU09)
+// PERFIL DE USUARIO
 // =========================================================================
 function ProfileView({ user, onProfileUpdated }) {
   const [editing, setEditing] = useState(false)
@@ -1513,7 +1501,7 @@ function ProfileView({ user, onProfileUpdated }) {
       try {
         const updated = await apiRequest('/auth/profile', { method: 'DELETE' })
         onProfileUpdated(updated)
-        setMsg('Perfil guardado parcialmente. Completa carrera y semestre para activar la compatibilidad (RN-03).')
+        setMsg('Perfil guardado parcialmente. Completa carrera y semestre para activar las sugerencias de compatibilidad.')
       } catch (err) {
         alert(err.message)
       }
@@ -1530,7 +1518,7 @@ function ProfileView({ user, onProfileUpdated }) {
       onProfileUpdated(updated)
       setMsg(
         updated.es_institucional
-          ? 'Correo verificado correctamente. Se ha asignado la insignia de Comunidad IPN a tu perfil (RN-02).'
+          ? 'Correo verificado correctamente. Se ha asignado la insignia de Comunidad IPN a tu perfil.'
           : 'Correo externo verificado correctamente.'
       )
     } catch (err) {
@@ -1575,7 +1563,7 @@ function ProfileView({ user, onProfileUpdated }) {
                 <p>{user.interests || 'Sin registrar'}</p>
               </div>
               <div className="info-row">
-                <span className="info-label">Estado del perfil (RN-03)</span>
+                <span className="info-label">Estado del perfil</span>
                 <strong>{user.has_complete_profile ? 'Perfil completo' : 'Perfil incompleto'}</strong>
               </div>
 
@@ -1684,7 +1672,7 @@ function App() {
   const [selectedPub, setSelectedPub] = useState(null)
   const [editingPub, setEditingPub] = useState(null)
 
-  // Filtros (13 filtros técnicos de CU20)
+  // Filtros técnicos del catálogo
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [filterOptions, setFilterOptions] = useState({ brands: [] })
@@ -1744,12 +1732,12 @@ function App() {
 
   const toggleCompatibility = () => {
     if (!user) {
-      alert('Inicia sesión para activar la búsqueda por compatibilidad con tu perfil académico (RN-03).')
+      alert('Inicia sesión para activar la búsqueda por compatibilidad con tu perfil académico.')
       setGuestBrowsing(false)
       return
     }
     if (!filters.only_compatible && !user.has_complete_profile) {
-      alert('Para activar la búsqueda por compatibilidad primero debes completar tu perfil académico (RN-03).')
+      alert('Para activar la búsqueda por compatibilidad primero debes completar tu perfil académico.')
       return
     }
     setFilter('only_compatible', !filters.only_compatible)
@@ -1917,7 +1905,7 @@ function App() {
       {sessionError && <p className="form-error">{sessionError}</p>}
 
       <main className="main-content">
-        {/* VISTA 1: EXPLORAR / CATÁLOGO PRINCIPAL (IU08) */}
+        {/* VISTA 1: EXPLORAR / CATÁLOGO PRINCIPAL */}
         {activeView === 'inicio' && (
           <>
             <section className="hero-banner">
@@ -1966,7 +1954,7 @@ function App() {
               </div>
             </section>
 
-            {/* BARRA Y PANEL DE LOS 13 FILTROS TÉCNICOS (CU20, CU21) */}
+            {/* BARRA Y PANEL DE FILTROS TÉCNICOS */}
             <section className="filter-bar panel">
               <div className="filter-row">
                 <div className="filter-group grow">

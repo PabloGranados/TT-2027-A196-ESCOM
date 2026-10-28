@@ -4,8 +4,10 @@ import hmac
 import os
 import re
 import secrets
+import smtplib
 import time
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
@@ -49,6 +51,34 @@ SESSION_COOKIE = "escom_session"
 # el vendedor de los datos de ejemplo se crea con una contraseña aleatoria que nadie conoce.
 DEMO_USER_EMAIL = os.getenv("DEMO_USER_EMAIL", "demo.escom@ipn.mx").strip().lower()
 DEMO_USER_PASSWORD = os.getenv("DEMO_USER_PASSWORD", "")
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "").strip()
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@escom.ipn.mx").strip()
+
+
+def send_system_email(to_email: str, subject: str, body_text: str) -> bool:
+    """Envía un correo real por SMTP si SMTP_HOST está configurado; de lo contrario opera en modo local."""
+    if not SMTP_HOST:
+        return False
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = SMTP_FROM
+        msg["To"] = to_email
+        msg.set_content(body_text)
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.ehlo()
+            if SMTP_PORT in (587, 2525):
+                server.starttls()
+                server.ehlo()
+            if SMTP_USER and SMTP_PASSWORD:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        return True
+    except Exception:
+        return False
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
@@ -1112,6 +1142,16 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         )
     )
     db.commit()
+    send_system_email(
+        to_email=user.email,
+        subject="Código de verificación de cuenta · ESCOM Hardware Match",
+        body_text=(
+            f"Hola {user.name},\n\n"
+            f"Tu código de verificación (vigente por 24 horas) es:\n\n"
+            f"{raw_verification_code}\n\n"
+            f"ESCOM Hardware Match · IPN"
+        ),
+    )
     create_session(db, user, response)
     return to_user_response(user)
 
@@ -1219,7 +1259,18 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
             )
         )
         db.commit()
-        dev_code = raw_code
+        sent = send_system_email(
+            to_email=user.email,
+            subject="Código para restablecer contraseña · ESCOM Hardware Match",
+            body_text=(
+                f"Hola {user.name},\n\n"
+                f"Solicitaste restablecer tu contraseña. Tu código (vigente por 24 horas) es:\n\n"
+                f"{raw_code}\n\n"
+                f"Si no realizaste esta solicitud, puedes ignorar este mensaje."
+            ),
+        )
+        if not sent:
+            dev_code = raw_code
 
     return {
         "message": uniform_msg,
@@ -1445,7 +1496,7 @@ def get_publications(
         if not has_complete_profile(user):
             raise HTTPException(
                 status_code=400,
-                detail="Para activar la búsqueda por compatibilidad primero debes completar tu perfil académico (RN-03).",
+                detail="Para activar la búsqueda por compatibilidad primero debes completar tu perfil académico.",
             )
 
     query = select(Publication).where(Publication.status == "Activa")
@@ -1557,7 +1608,7 @@ def get_publication(
     return to_pub_response(pub, user, db)
 
 
-# CU28: Ver Datos de Contacto (RN-06, RN-07, RN-10)
+# Ver Datos de Contacto
 @app.get("/api/publications/{publication_id}/contact")
 def get_contact_info(
     publication_id: int,
@@ -1568,14 +1619,13 @@ def get_contact_info(
     if not has_complete_profile(user):
         raise HTTPException(
             status_code=403,
-            detail="Debes contar con sesión iniciada y perfil académico registrado para consultar los datos de contacto (RN-07).",
+            detail="Debes contar con sesión iniciada y perfil académico registrado para consultar los datos de contacto.",
         )
 
     pub = db.scalar(select(Publication).where(Publication.id == publication_id))
     if not pub:
         raise HTTPException(status_code=404, detail="Publicación no encontrada")
 
-    # RN-10: El sistema no muestra datos de contacto si el usuario es el propio ofertante
     if pub.seller_id == user.id:
         raise HTTPException(status_code=400, detail="Eres el vendedor de esta publicación.")
 
@@ -1587,7 +1637,7 @@ def get_contact_info(
         "seller_career": pub.seller.career,
         "seller_es_institucional": pub.seller.es_institucional,
         "contact": contact,
-        "notice": "Datos de contacto visibles. Recuerda que la plataforma no procesa pagos; coordina la revisión dentro de la ESCOM (RN-06).",
+        "notice": "Datos de contacto visibles. Recuerda que la plataforma no procesa pagos; coordina la revisión dentro de la ESCOM.",
     }
 
 
