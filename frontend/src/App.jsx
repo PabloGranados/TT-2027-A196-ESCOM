@@ -41,8 +41,10 @@ const EMPTY_FILTERS = {
   device_type: '',
   sort_by: 'recientes',
   brand: '',
+  processor_brand: '',
   condition: '',
   min_ram: '',
+  ram_type: '',
   min_storage: '',
   storage_type: '',
   gpu_type: '',
@@ -84,21 +86,27 @@ async function apiRequest(path, options = {}) {
 }
 
 // =========================================================================
-// PANTALLA DE ACCESO (LOGIN & REGISTRO)
+// PANTALLA DE ACCESO (LOGIN, REGISTRO, VERIFICACIÓN Y RESTABLECIMIENTO)
 // =========================================================================
-function AuthScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState('login')
+function AuthScreen({ onAuthenticated, onBrowseAsGuest, initialMode = 'login' }) {
+  const [mode, setMode] = useState(initialMode) // 'login', 'register', 'forgot', 'reset'
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     role: 'Alumno',
     career: 'Ingeniería en Sistemas Computacionales',
     semester: '1° semestre',
     interests: [],
     phone: '',
+    resetCode: '',
+    newPassword: '',
+    confirmNewPassword: '',
   })
   const [error, setError] = useState('')
+  const [infoMessage, setInfoMessage] = useState('')
+  const [devResetCode, setDevResetCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [registeredUser, setRegisteredUser] = useState(null)
 
@@ -125,6 +133,7 @@ function AuthScreen({ onAuthenticated }) {
   const submit = async (event) => {
     event.preventDefault()
     setError('')
+    setInfoMessage('')
     setLoading(true)
     try {
       if (mode === 'login') {
@@ -133,7 +142,10 @@ function AuthScreen({ onAuthenticated }) {
           body: JSON.stringify({ email: form.email, password: form.password }),
         })
         onAuthenticated(data)
-      } else {
+      } else if (mode === 'register') {
+        if (form.confirmPassword && form.password !== form.confirmPassword) {
+          throw new Error('La contraseña y su confirmación no coinciden.')
+        }
         const payload = {
           name: form.name.trim(),
           email: form.email.trim(),
@@ -149,6 +161,34 @@ function AuthScreen({ onAuthenticated }) {
           body: JSON.stringify(payload),
         })
         setRegisteredUser(data)
+      } else if (mode === 'forgot') {
+        // CU05: Solicitar Restablecimiento de Contraseña (IU15)
+        const res = await apiRequest('/auth/forgot-password', {
+          method: 'POST',
+          body: JSON.stringify({ email: form.email.trim() }),
+        })
+        setInfoMessage(res.message)
+        if (res.dev_reset_code) {
+          setDevResetCode(res.dev_reset_code)
+          setForm((prev) => ({ ...prev, resetCode: res.dev_reset_code }))
+        }
+      } else if (mode === 'reset') {
+        // CU06: Confirmar Restablecimiento de Contraseña (IU16)
+        if (form.newPassword !== form.confirmNewPassword) {
+          throw new Error('La nueva contraseña y su confirmación no coinciden.')
+        }
+        const res = await apiRequest('/auth/reset-password', {
+          method: 'POST',
+          body: JSON.stringify({
+            code: form.resetCode.trim(),
+            new_password: form.newPassword,
+            confirm_password: form.confirmNewPassword,
+          }),
+        })
+        setMode('login')
+        setDevResetCode('')
+        setInfoMessage(res.message)
+        setForm((prev) => ({ ...prev, password: '', resetCode: '', newPassword: '', confirmNewPassword: '' }))
       }
     } catch (requestError) {
       setError(requestError.message)
@@ -160,7 +200,9 @@ function AuthScreen({ onAuthenticated }) {
   const handleVerifyEmail = async (token) => {
     setLoading(true)
     try {
-      const verified = await apiRequest(`/auth/verify-email?token=${token}`, { method: 'POST' })
+      const verified = await apiRequest(`/auth/verify-email?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+      })
       onAuthenticated(verified)
     } catch (err) {
       setError(err.message)
@@ -169,17 +211,20 @@ function AuthScreen({ onAuthenticated }) {
     }
   }
 
-  // Notificación amigable tras el registro
+  // Pantalla de Verificación de Correo tras el registro (IU03 - CU02, CU03)
   if (registeredUser) {
     return (
       <main className="auth-shell">
         <section className="auth-panel panel text-center">
           <div className="ipn-pill">ESCOM · IPN</div>
-          <h2>¡Cuenta creada con éxito!</h2>
+          <h2>¡Cuenta creada exitosamente!</h2>
           <p className="auth-description">
-            Se ha vinculado tu cuenta para <strong>{registeredUser.email}</strong>.
-            Puedes confirmar tu correo ahora para habilitar la insignia institucional.
+            Se ha registrado la cuenta para <strong>{registeredUser.email}</strong>. Confirma tu
+            código de verificación (vigente 24 h) para activar tu cuenta y, si tu correo pertenece
+            al IPN, recibir la insignia <strong>Comunidad IPN</strong>.
           </p>
+
+          {error && <p className="form-error" role="alert">{error}</p>}
 
           <div className="auth-actions-stacked">
             <button
@@ -188,7 +233,7 @@ function AuthScreen({ onAuthenticated }) {
               onClick={() => handleVerifyEmail(registeredUser.verification_token)}
               disabled={loading}
             >
-              {loading ? 'Confirmando…' : 'Confirmar correo y entrar'}
+              {loading ? 'Confirmando…' : 'Confirmar código de verificación'}
             </button>
             <button
               type="button"
@@ -211,11 +256,21 @@ function AuthScreen({ onAuthenticated }) {
             <span className="brand-badge-ipn">ESCOM</span>
             <span className="brand-name">Hardware Match</span>
           </div>
-          <h1>{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</h1>
+          <h1>
+            {mode === 'login' && 'Iniciar sesión'}
+            {mode === 'register' && 'Crear cuenta'}
+            {mode === 'forgot' && 'Recuperar contraseña'}
+            {mode === 'reset' && 'Restablecer contraseña'}
+          </h1>
           <p className="auth-description">
-            {mode === 'login'
-              ? 'Encuentra laptops y tabletas adaptadas a las exigencias de tu carrera.'
-              : 'Regístrate con tu perfil académico para consultar y publicar ofertas.'}
+            {mode === 'login' &&
+              'Encuentra laptops y tabletas adaptadas a las exigencias de tu carrera.'}
+            {mode === 'register' &&
+              'Regístrate con tu perfil académico para consultar y publicar ofertas.'}
+            {mode === 'forgot' &&
+              'Ingresa tu correo electrónico para solicitar un código de restablecimiento con vigencia de 24 horas.'}
+            {mode === 'reset' &&
+              'Ingresa el código de restablecimiento recibido y define tu nueva contraseña.'}
           </p>
         </header>
 
@@ -231,6 +286,29 @@ function AuthScreen({ onAuthenticated }) {
           </div>
         )}
 
+        {infoMessage && <p className="success-banner" role="status">{infoMessage}</p>}
+
+        {mode === 'forgot' && devResetCode && (
+          <div className="demo-box" style={{ marginBottom: '1rem' }}>
+            <div className="demo-info">
+              <span className="demo-tag">Código generado (entorno local TT1)</span>
+              <p className="demo-text" style={{ wordBreak: 'break-all', fontSize: '0.8rem' }}>
+                {devResetCode}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="ghost-btn-sm"
+              onClick={() => {
+                setError('')
+                setMode('reset')
+              }}
+            >
+              Usar código
+            </button>
+          </div>
+        )}
+
         <form className="auth-form" onSubmit={submit}>
           {mode === 'register' && (
             <>
@@ -239,6 +317,7 @@ function AuthScreen({ onAuthenticated }) {
                 <input
                   required
                   placeholder="Tu nombre y apellidos"
+                  minLength="3"
                   maxLength="120"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -323,49 +402,202 @@ function AuthScreen({ onAuthenticated }) {
             </>
           )}
 
-          <label>
-            Correo electrónico
-            <input
-              required
-              type="email"
-              placeholder="tu.correo@ipn.mx o personal"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </label>
+          {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
+            <label>
+              Correo electrónico
+              <input
+                required
+                type="email"
+                placeholder="tu.correo@alumno.ipn.mx o personal"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </label>
+          )}
 
-          <label>
-            Contraseña
-            <input
-              required
-              type="password"
-              placeholder="Mínimo 8 caracteres"
-              minLength="8"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-          </label>
+          {(mode === 'login' || mode === 'register') && (
+            <label>
+              Contraseña
+              <input
+                required
+                type="password"
+                placeholder="Mínimo 8 caracteres"
+                minLength="8"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+            </label>
+          )}
+
+          {mode === 'register' && (
+            <label>
+              Confirmar contraseña
+              <input
+                required
+                type="password"
+                placeholder="Repite tu contraseña"
+                minLength="8"
+                value={form.confirmPassword}
+                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+              />
+            </label>
+          )}
+
+          {mode === 'reset' && (
+            <>
+              <label>
+                Código de restablecimiento
+                <input
+                  required
+                  placeholder="Pega el código recibido por correo"
+                  value={form.resetCode}
+                  onChange={(e) => setForm({ ...form, resetCode: e.target.value })}
+                />
+              </label>
+              <label>
+                Nueva contraseña
+                <input
+                  required
+                  type="password"
+                  placeholder="Mínimo 8 caracteres"
+                  minLength="8"
+                  value={form.newPassword}
+                  onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+                />
+              </label>
+              <label>
+                Confirmar nueva contraseña
+                <input
+                  required
+                  type="password"
+                  placeholder="Repite tu nueva contraseña"
+                  minLength="8"
+                  value={form.confirmNewPassword}
+                  onChange={(e) => setForm({ ...form, confirmNewPassword: e.target.value })}
+                />
+              </label>
+            </>
+          )}
 
           {error && <p className="form-error" role="alert">{error}</p>}
 
           <button className="primary submit-btn" type="submit" disabled={loading}>
-            {loading ? 'Cargando…' : mode === 'login' ? 'Entrar' : 'Registrarme'}
+            {loading
+              ? 'Procesando…'
+              : mode === 'login'
+                ? 'Iniciar sesión'
+                : mode === 'register'
+                  ? 'Crear cuenta'
+                  : mode === 'forgot'
+                    ? 'Enviar código'
+                    : 'Restablecer contraseña'}
           </button>
         </form>
 
-        <footer className="auth-footer">
-          <button
-            className="link-btn"
-            type="button"
-            onClick={() => {
-              setMode(mode === 'login' ? 'register' : 'login')
-              setError('')
-            }}
-          >
-            {mode === 'login'
-              ? '¿No tienes cuenta? Regístrate aquí'
-              : '¿Ya tienes cuenta? Inicia sesión'}
-          </button>
+        <footer className="auth-footer" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {mode === 'login' && (
+            <>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setMode('forgot')
+                  setError('')
+                  setInfoMessage('')
+                }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setMode('register')
+                  setError('')
+                  setInfoMessage('')
+                }}
+              >
+                ¿No tienes cuenta? Crear cuenta nueva
+              </button>
+            </>
+          )}
+
+          {mode === 'register' && (
+            <button
+              className="link-btn"
+              type="button"
+              onClick={() => {
+                setMode('login')
+                setError('')
+                setInfoMessage('')
+              }}
+            >
+              ¿Ya tienes cuenta? Iniciar sesión
+            </button>
+          )}
+
+          {mode === 'forgot' && (
+            <>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setMode('reset')
+                  setError('')
+                }}
+              >
+                Ya tengo mi código
+              </button>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setMode('login')
+                  setError('')
+                  setInfoMessage('')
+                }}
+              >
+                Volver a Iniciar sesión
+              </button>
+            </>
+          )}
+
+          {mode === 'reset' && (
+            <>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setMode('forgot')
+                  setError('')
+                }}
+              >
+                Solicitar nuevo código
+              </button>
+              <button
+                className="link-btn"
+                type="button"
+                onClick={() => {
+                  setMode('login')
+                  setError('')
+                  setInfoMessage('')
+                }}
+              >
+                Volver a Iniciar sesión
+              </button>
+            </>
+          )}
+
+          {onBrowseAsGuest && (
+            <button
+              className="link-btn"
+              type="button"
+              onClick={onBrowseAsGuest}
+              style={{ opacity: 0.85 }}
+            >
+              Explorar catálogo como Visitante (sin sesión)
+            </button>
+          )}
         </footer>
       </section>
     </main>
@@ -373,7 +605,7 @@ function AuthScreen({ onAuthenticated }) {
 }
 
 // =========================================================================
-// MODAL DE DETALLE DE LA PUBLICACIÓN
+// MODAL DE DETALLE DE LA PUBLICACIÓN (IU07 Ofertante / IU09 Interesado)
 // =========================================================================
 function PublicationModal({
   publication,
@@ -383,6 +615,7 @@ function PublicationModal({
   onEdit,
   onDelete,
   onToggleFavorite,
+  onRequireLogin,
 }) {
   const [contactData, setContactData] = useState(null)
   const [contactError, setContactError] = useState('')
@@ -394,6 +627,10 @@ function PublicationModal({
 
   const loadContact = async () => {
     setContactError('')
+    if (!currentUser) {
+      if (onRequireLogin) onRequireLogin()
+      return
+    }
     try {
       const data = await apiRequest(`/api/publications/${publication.id}/contact`)
       setContactData(data)
@@ -440,13 +677,13 @@ function PublicationModal({
               <button type="button" className="secondary-sm" onClick={copyLink}>
                 {copiedLink ? 'Enlace copiado' : 'Compartir enlace'}
               </button>
-              {!isOwner && (
+              {!isOwner && currentUser && (
                 <button
                   type="button"
                   className={`secondary-sm ${publication.is_favorite ? 'btn-fav-active' : ''}`}
                   onClick={() => onToggleFavorite(publication)}
                 >
-                  {publication.is_favorite ? 'Guardado en favoritos' : 'Guardar en favoritos'}
+                  {publication.is_favorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
                 </button>
               )}
             </div>
@@ -455,7 +692,7 @@ function PublicationModal({
           <div className="modal-details">
             <div className="modal-top-meta">
               <span className="device-pill">{publication.device_type}</span>
-              {publication.compatibility_score && (
+              {currentUser && publication.compatibility_score && (
                 <span className="compat-score-pill">
                   {publication.compatibility_score}% compatible
                 </span>
@@ -467,7 +704,7 @@ function PublicationModal({
               {publication.brand} · {publication.model}
             </p>
 
-            {publication.compatibility_badge && (
+            {currentUser && publication.compatibility_badge && (
               <div className="compatibility-alert">
                 <strong>{publication.compatibility_badge}</strong>
                 <p>{publication.compatibility_detail}</p>
@@ -478,11 +715,16 @@ function PublicationModal({
             <div className="spec-list">
               <div className="spec-item">
                 <span>Procesador</span>
-                <strong>{publication.processor}</strong>
+                <strong>
+                  {publication.processor}
+                  {publication.processor_brand ? ` (${publication.processor_brand})` : ''}
+                </strong>
               </div>
               <div className="spec-item">
                 <span>Memoria RAM</span>
-                <strong>{publication.ram_gb} GB</strong>
+                <strong>
+                  {publication.ram_gb} GB{publication.ram_type ? ` ${publication.ram_type}` : ''}
+                </strong>
               </div>
               <div className="spec-item">
                 <span>Almacenamiento</span>
@@ -509,7 +751,7 @@ function PublicationModal({
 
             {isOwner ? (
               <div className="owner-box">
-                <span className="box-title">Opciones de publicación</span>
+                <span className="box-title">Opciones de administración (Ofertante · RN-10)</span>
                 <div className="owner-buttons">
                   {onEdit && (
                     <button
@@ -517,7 +759,7 @@ function PublicationModal({
                       className="secondary-sm"
                       onClick={() => onEdit(publication)}
                     >
-                      Editar
+                      Editar publicación
                     </button>
                   )}
                   {publication.status === 'Activa' && (
@@ -529,7 +771,7 @@ function PublicationModal({
                       Marcar como vendida
                     </button>
                   )}
-                  {publication.status === 'Vendida' && (
+                  {publication.status !== 'Activa' && (
                     <button
                       type="button"
                       className="secondary-sm"
@@ -550,11 +792,11 @@ function PublicationModal({
             ) : (
               <div className="seller-box">
                 <div className="seller-info">
-                  <span className="seller-label">Vendedor</span>
+                  <span className="seller-label">Ofertante</span>
                   <div className="seller-name-row">
                     <strong>{publication.seller_name}</strong>
                     {publication.seller_es_institucional && (
-                      <span className="ipn-verify-tag">IPN</span>
+                      <span className="ipn-verify-tag">Comunidad IPN</span>
                     )}
                   </div>
                   <span className="seller-role-text">
@@ -563,15 +805,24 @@ function PublicationModal({
                   </span>
                 </div>
 
-                {!contactData ? (
+                {!currentUser ? (
+                  <button type="button" className="primary" onClick={onRequireLogin}>
+                    Inicia sesión para ver datos de contacto (RN-07)
+                  </button>
+                ) : !contactData ? (
                   <button type="button" className="primary" onClick={loadContact}>
-                    Contactar al vendedor
+                    Ver datos de contacto
                   </button>
                 ) : (
                   <div className="contact-revealed">
                     <p className="contact-number">
-                      Teléfono: <strong>{contactData.contact}</strong>
+                      Contacto: <strong>{contactData.contact}</strong>
                     </p>
+                    {contactData.notice && (
+                      <p className="muted-text" style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>
+                        {contactData.notice}
+                      </p>
+                    )}
                     <a
                       href={`https://wa.me/52${contactData.contact.replace(/\D/g, '')}?text=Hola,%20me%20interesa%20tu%20equipo%20en%20Hardware%20Match:%20${encodeURIComponent(publication.title)}`}
                       target="_blank"
@@ -593,7 +844,7 @@ function PublicationModal({
 }
 
 // =========================================================================
-// FORMULARIO DE PUBLICACIÓN DE OFERTA (CREACIÓN Y EDICIÓN)
+// FORMULARIO DE PUBLICACIÓN DE OFERTA (CREACIÓN Y EDICIÓN - IU05)
 // =========================================================================
 function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
   const isEditing = Boolean(initialData && initialData.id)
@@ -604,7 +855,9 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
     model: initialData?.model || '',
     condition: initialData?.condition || 'Usado - Como nuevo',
     processor: initialData?.processor || '',
+    processor_brand: initialData?.processor_brand || 'Intel',
     ram_gb: initialData?.ram_gb || 16,
+    ram_type: initialData?.ram_type || 'DDR4',
     storage_gb: initialData?.storage_gb || 512,
     storage_type: initialData?.storage_type || 'SSD NVMe',
     gpu: initialData?.gpu || 'Integrada',
@@ -631,7 +884,9 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
         brand: form.brand.trim(),
         model: form.model.trim(),
         processor: form.processor.trim(),
+        processor_brand: form.processor_brand,
         ram_gb: Number(form.ram_gb),
+        ram_type: form.ram_type,
         storage_gb: Number(form.storage_gb),
         price: Number(form.price),
         stock: Number(form.stock || 1),
@@ -647,6 +902,11 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
           body: JSON.stringify(payload),
         }
       )
+      if (saved && saved.merged_duplicate) {
+        alert(
+          'Se detectó una publicación propia con idénticas especificaciones y observaciones; se incrementó automáticamente su stock disponible (RN-09).'
+        )
+      }
       onPublished(saved)
     } catch (err) {
       setFormError(err.message)
@@ -662,7 +922,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
         <p className="panel-subtitle">
           {isEditing
             ? 'Actualiza las especificaciones, precio o detalles de entrega de tu equipo.'
-            : 'Ingresa los detalles técnicos de tu equipo para que los compradores puedan evaluar su compatibilidad.'}
+            : 'Ingresa los detalles técnicos obligatorios (RN-04) para que los interesados evalúen su compatibilidad.'}
         </p>
       </header>
 
@@ -684,7 +944,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
             </label>
 
             <label>
-              Condición
+              Condición física
               <select
                 value={form.condition}
                 onChange={(e) => setForm({ ...form, condition: e.target.value })}
@@ -734,10 +994,23 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
         </div>
 
         <div className="form-section">
-          <span className="section-num">2. Ficha técnica</span>
+          <span className="section-num">2. Ficha técnica obligatoria (RN-04)</span>
           <div className="form-grid-2">
             <label>
-              Procesador (CPU)
+              Familia / Marca de CPU
+              <select
+                value={form.processor_brand}
+                onChange={(e) => setForm({ ...form, processor_brand: e.target.value })}
+              >
+                <option value="Intel">Intel</option>
+                <option value="AMD">AMD</option>
+                <option value="Apple Silicon">Apple Silicon</option>
+                <option value="Qualcomm">Qualcomm</option>
+              </select>
+            </label>
+
+            <label>
+              Procesador (Modelo y generación)
               <input
                 required
                 placeholder="Ej. Intel Core i5-1135G7, AMD Ryzen 7 5800H, Apple M2"
@@ -746,9 +1019,11 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
                 onChange={(e) => setForm({ ...form, processor: e.target.value })}
               />
             </label>
+          </div>
 
+          <div className="form-grid-2">
             <label>
-              Memoria RAM
+              Memoria RAM (Capacidad)
               <select
                 value={form.ram_gb}
                 onChange={(e) => setForm({ ...form, ram_gb: Number(e.target.value) })}
@@ -762,11 +1037,25 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
                 <option value="64">64 GB</option>
               </select>
             </label>
+
+            <label>
+              Tipo de memoria RAM
+              <select
+                value={form.ram_type}
+                onChange={(e) => setForm({ ...form, ram_type: e.target.value })}
+              >
+                <option value="DDR4">DDR4</option>
+                <option value="DDR5">DDR5</option>
+                <option value="LPDDR4X">LPDDR4X</option>
+                <option value="LPDDR5">LPDDR5</option>
+                <option value="Unificada">Unificada</option>
+              </select>
+            </label>
           </div>
 
           <div className="form-grid-2">
             <label>
-              Capacidad de disco
+              Capacidad de almacenamiento
               <select
                 value={form.storage_gb}
                 onChange={(e) => setForm({ ...form, storage_gb: Number(e.target.value) })}
@@ -797,6 +1086,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
             <label>
               Tarjeta gráfica (GPU)
               <input
+                required
                 placeholder="Ej. RTX 3050 o Integrada"
                 value={form.gpu}
                 onChange={(e) => setForm({ ...form, gpu: e.target.value })}
@@ -806,6 +1096,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
             <label>
               Tamaño de pantalla
               <input
+                required
                 placeholder='Ej. 14", 15.6", 11"'
                 value={form.screen_size}
                 onChange={(e) => setForm({ ...form, screen_size: e.target.value })}
@@ -815,6 +1106,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
             <label>
               Estado de la batería
               <input
+                required
                 placeholder="Ej. 90% salud, dura 5 hrs"
                 value={form.battery_condition}
                 onChange={(e) => setForm({ ...form, battery_condition: e.target.value })}
@@ -824,14 +1116,14 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
         </div>
 
         <div className="form-section">
-          <span className="section-num">3. Precio y entrega</span>
+          <span className="section-num">3. Precio, stock y observaciones</span>
           <div className="form-grid-3">
             <label>
               Precio (MXN)
               <input
                 required
                 type="number"
-                min="500"
+                min="1"
                 step="50"
                 placeholder="Ej. 11000"
                 value={form.price}
@@ -840,7 +1132,7 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
             </label>
 
             <label>
-              Piezas disponibles
+              Cantidad disponible (stock)
               <input
                 required
                 type="number"
@@ -872,11 +1164,11 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
           </label>
 
           <label>
-            Descripción y detalles
+            Descripción y observaciones particulares
             <textarea
               required
               rows="4"
-              placeholder="Incluye accesorios incluidos (cargador original, funda), estado estético y horarios o lugar de entrega dentro de la escuela."
+              placeholder="Incluye accesorios (cargador original, funda), detalles estéticos particulares y horario o lugar de entrega dentro de la ESCOM."
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
@@ -903,10 +1195,11 @@ function CreatePublicationView({ initialData = null, onPublished, onCancel }) {
 }
 
 // =========================================================================
-// MIS PUBLICACIONES
+// MIS PUBLICACIONES (IU06 - CU14, CU15, CU16)
 // =========================================================================
-function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub }) {
+function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub, onStatusChange }) {
   const [myPubs, setMyPubs] = useState([])
+  const [statusFilter, setStatusFilter] = useState('Todas')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -938,32 +1231,49 @@ function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub }
     }
   }, [])
 
+  const visiblePubs =
+    statusFilter === 'Todas' ? myPubs : myPubs.filter((p) => p.status === statusFilter)
+
   return (
     <section className="panel">
       <div className="section-head">
         <div>
           <h2>Mis publicaciones</h2>
-          <p className="panel-subtitle">Equipos que tienes actualmente a la venta.</p>
+          <p className="panel-subtitle">
+            Administra el estado, vigencia y stock de las ofertas que has creado.
+          </p>
         </div>
-        <button className="primary-sm" onClick={onCreateNew}>
-          + Nueva publicación
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filtrar por estado"
+          >
+            <option value="Todas">Todas</option>
+            <option value="Activa">Activas</option>
+            <option value="Vendida">Vendidas</option>
+            <option value="Obsoleta">Obsoletas</option>
+          </select>
+          <button className="primary-sm" onClick={onCreateNew}>
+            + Nueva publicación
+          </button>
+        </div>
       </div>
 
       {error && <p className="form-error">{error}</p>}
 
       {loading ? (
         <p className="muted-text">Cargando publicaciones…</p>
-      ) : myPubs.length === 0 ? (
+      ) : visiblePubs.length === 0 ? (
         <div className="empty-box">
-          <p>No tienes publicaciones activas.</p>
+          <p>Aún no has creado publicaciones de oferta en este estado.</p>
           <button className="primary" onClick={onCreateNew}>
-            Crear publicación
+            Nueva publicación
           </button>
         </div>
       ) : (
         <div className="catalog-grid">
-          {myPubs.map((pub) => (
+          {visiblePubs.map((pub) => (
             <article key={pub.id} className="card-item">
               <div className="card-media">
                 <img
@@ -980,24 +1290,48 @@ function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub }
               </div>
 
               <div className="card-body">
-                <span className="card-brand">{pub.brand} {pub.model}</span>
+                <span className="card-brand">
+                  {pub.brand} {pub.model}
+                </span>
                 <h4 className="card-title">{pub.title}</h4>
 
                 <div className="specs-chips">
                   <span>{pub.processor}</span>
-                  <span>{pub.ram_gb} GB RAM</span>
+                  <span>
+                    {pub.ram_gb} GB {pub.ram_type || 'RAM'}
+                  </span>
                   <span>{pub.storage_gb} GB</span>
                 </div>
 
                 <div className="card-bottom">
                   <strong className="card-price">${pub.price.toLocaleString()} MXN</strong>
                   <div className="card-actions">
-                    <button type="button" className="secondary-sm" onClick={() => onSelectPub(pub)}>
-                      Detalles
+                    <button
+                      type="button"
+                      className="secondary-sm"
+                      onClick={() => onSelectPub(pub)}
+                    >
+                      Ver detalle
                     </button>
                     {onEditPub && (
-                      <button type="button" className="secondary-sm" onClick={() => onEditPub(pub)}>
+                      <button
+                        type="button"
+                        className="secondary-sm"
+                        onClick={() => onEditPub(pub)}
+                      >
                         Editar
+                      </button>
+                    )}
+                    {onStatusChange && pub.status === 'Activa' && (
+                      <button
+                        type="button"
+                        className="secondary-sm"
+                        onClick={async () => {
+                          await onStatusChange(pub.id, 'Vendida')
+                          loadData()
+                        }}
+                      >
+                        Vendida
                       </button>
                     )}
                     <button
@@ -1024,7 +1358,7 @@ function MyPublicationsView({ onSelectPub, onCreateNew, onEditPub, onDeletePub }
 }
 
 // =========================================================================
-// FAVORITOS
+// FAVORITOS (IU13 - CU29, CU30, CU31, RN-12)
 // =========================================================================
 function FavoritesView({ onSelectPub, onRemoveFav }) {
   const [favs, setFavs] = useState([])
@@ -1051,47 +1385,97 @@ function FavoritesView({ onSelectPub, onRemoveFav }) {
     <section className="panel">
       <header className="panel-header">
         <h2>Favoritos</h2>
-        <p className="panel-subtitle">Publicaciones que has guardado para consultar después.</p>
+        <p className="panel-subtitle">
+          Publicaciones guardadas mostrando su estado y stock en vivo (RN-12).
+        </p>
       </header>
 
       {loading ? (
         <p className="muted-text">Cargando favoritos…</p>
       ) : favs.length === 0 ? (
         <div className="empty-box">
-          <p>Aún no has guardado ninguna publicación.</p>
+          <p>Aún no tienes publicaciones guardadas en favoritos.</p>
         </div>
       ) : (
         <div className="catalog-grid">
-          {favs.map((pub) => (
-            <article key={pub.id} className="card-item">
-              <div className="card-body">
-                <span className="card-brand">{pub.brand}</span>
-                <h4 className="card-title">{pub.title}</h4>
-                <div className="specs-chips">
-                  <span>{pub.processor}</span>
-                  <span>{pub.ram_gb} GB RAM</span>
-                </div>
-                <div className="card-bottom">
-                  <strong className="card-price">${pub.price.toLocaleString()} MXN</strong>
-                  <div className="card-actions">
-                    <button type="button" className="secondary-sm" onClick={() => onSelectPub(pub)}>
-                      Ver
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-sm"
-                      onClick={async () => {
-                        await onRemoveFav(pub)
-                        setFavs(favs.filter((f) => f.id !== pub.id))
-                      }}
-                    >
-                      Quitar
-                    </button>
+          {favs.map((pub) =>
+            pub.unavailable ? (
+              <article
+                key={pub.id}
+                className="card-item"
+                style={{ opacity: 0.65, background: '#f3f4f6' }}
+              >
+                <div className="card-body">
+                  <span className="card-brand">{pub.brand}</span>
+                  <h4 className="card-title">[Esta publicación ya no está disponible]</h4>
+                  <p className="muted-text">El ofertante eliminó esta publicación.</p>
+                  <div className="card-bottom">
+                    <span className="meta-badge">No disponible</span>
+                    <div className="card-actions">
+                      <button
+                        type="button"
+                        className="danger-sm"
+                        onClick={async () => {
+                          await onRemoveFav(pub)
+                          setFavs(favs.filter((f) => f.id !== pub.id))
+                        }}
+                      >
+                        Quitar de favoritos
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            ) : (
+              <article key={pub.id} className="card-item">
+                <div className="card-body">
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '0.35rem',
+                    }}
+                  >
+                    <span className="card-brand">
+                      {pub.brand} · {pub.model}
+                    </span>
+                    <span className={`status-badge status-${pub.status.toLowerCase()}`}>
+                      {pub.status} (Stock: {pub.stock})
+                    </span>
+                  </div>
+                  <h4 className="card-title">{pub.title}</h4>
+                  <div className="specs-chips">
+                    <span>{pub.processor}</span>
+                    <span>{pub.ram_gb} GB RAM</span>
+                    <span>{pub.storage_gb} GB</span>
+                  </div>
+                  <div className="card-bottom">
+                    <strong className="card-price">${pub.price.toLocaleString()} MXN</strong>
+                    <div className="card-actions">
+                      <button
+                        type="button"
+                        className="secondary-sm"
+                        onClick={() => onSelectPub(pub)}
+                      >
+                        Ver publicación
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-sm"
+                        onClick={async () => {
+                          await onRemoveFav(pub)
+                          setFavs(favs.filter((f) => f.id !== pub.id))
+                        }}
+                      >
+                        Quitar de favoritos
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            )
+          )}
         </div>
       )}
     </section>
@@ -1099,7 +1483,7 @@ function FavoritesView({ onSelectPub, onRemoveFav }) {
 }
 
 // =========================================================================
-// PERFIL DE USUARIO
+// PERFIL DE USUARIO (IU04 - CU08, CU09)
 // =========================================================================
 function ProfileView({ user, onProfileUpdated }) {
   const [editing, setEditing] = useState(false)
@@ -1118,7 +1502,7 @@ function ProfileView({ user, onProfileUpdated }) {
       })
       onProfileUpdated(updated)
       setEditing(false)
-      setMsg('Perfil actualizado con éxito.')
+      setMsg('Perfil académico actualizado. Ya puedes activar la búsqueda por compatibilidad.')
     } catch (err) {
       alert(err.message)
     }
@@ -1129,7 +1513,7 @@ function ProfileView({ user, onProfileUpdated }) {
       try {
         const updated = await apiRequest('/auth/profile', { method: 'DELETE' })
         onProfileUpdated(updated)
-        setMsg('Perfil académico restablecido.')
+        setMsg('Perfil guardado parcialmente. Completa carrera y semestre para activar la compatibilidad (RN-03).')
       } catch (err) {
         alert(err.message)
       }
@@ -1144,7 +1528,11 @@ function ProfileView({ user, onProfileUpdated }) {
         { method: 'POST' }
       )
       onProfileUpdated(updated)
-      setMsg('Correo verificado con éxito.')
+      setMsg(
+        updated.es_institucional
+          ? 'Correo verificado correctamente. Se ha asignado la insignia de Comunidad IPN a tu perfil (RN-02).'
+          : 'Correo externo verificado correctamente.'
+      )
     } catch (err) {
       alert(err.message)
     }
@@ -1185,6 +1573,10 @@ function ProfileView({ user, onProfileUpdated }) {
               <div className="info-row">
                 <span className="info-label">Intereses</span>
                 <p>{user.interests || 'Sin registrar'}</p>
+              </div>
+              <div className="info-row">
+                <span className="info-label">Estado del perfil (RN-03)</span>
+                <strong>{user.has_complete_profile ? 'Perfil completo' : 'Perfil incompleto'}</strong>
               </div>
 
               <div className="btn-group-row">
@@ -1234,7 +1626,7 @@ function ProfileView({ user, onProfileUpdated }) {
 
               <div className="btn-group-row">
                 <button type="submit" className="primary">
-                  Guardar cambios
+                  Guardar perfil académico
                 </button>
                 <button type="button" className="secondary" onClick={() => setEditing(false)}>
                   Cancelar
@@ -1248,9 +1640,7 @@ function ProfileView({ user, onProfileUpdated }) {
           <h3>Estado de la cuenta</h3>
           <div className="status-box">
             {user.es_institucional ? (
-              <div className="badge-ipn-verified">
-                Comunidad IPN Verificada
-              </div>
+              <div className="badge-ipn-verified">Comunidad IPN Verificada</div>
             ) : (
               <div className="badge-standard">
                 {user.is_verified ? 'Cuenta estándar verificada' : 'Cuenta pendiente de verificar'}
@@ -1284,6 +1674,7 @@ function ProfileView({ user, onProfileUpdated }) {
 function App() {
   const [activeView, setActiveView] = useState('inicio') // 'inicio', 'publicar', 'mis-publicaciones', 'favoritos', 'perfil'
   const [user, setUser] = useState(null)
+  const [guestBrowsing, setGuestBrowsing] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [sessionError, setSessionError] = useState('')
 
@@ -1293,7 +1684,7 @@ function App() {
   const [selectedPub, setSelectedPub] = useState(null)
   const [editingPub, setEditingPub] = useState(null)
 
-  // Filtros
+  // Filtros (13 filtros técnicos de CU20)
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [filterOptions, setFilterOptions] = useState({ brands: [] })
@@ -1324,7 +1715,7 @@ function App() {
   }
 
   useEffect(() => {
-    if (!user) return
+    if (!user && !guestBrowsing) return
     let ignore = false
     apiRequest(buildPublicationsUrl(filters))
       .then((data) => {
@@ -1334,14 +1725,14 @@ function App() {
     return () => {
       ignore = true
     }
-  }, [user, filters])
+  }, [user, guestBrowsing, filters])
 
   useEffect(() => {
-    if (!user) return
+    if (!user && !guestBrowsing) return
     apiRequest('/api/filters/options')
       .then((data) => setFilterOptions(data))
       .catch(() => {})
-  }, [user, publications.length])
+  }, [user, guestBrowsing, publications.length])
 
   const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
 
@@ -1352,8 +1743,13 @@ function App() {
   const resetFilters = () => setFilters(EMPTY_FILTERS)
 
   const toggleCompatibility = () => {
-    if (!filters.only_compatible && user && !user.has_complete_profile) {
-      alert('Completa tu carrera y semestre en "Mi perfil" antes de activar este filtro.')
+    if (!user) {
+      alert('Inicia sesión para activar la búsqueda por compatibilidad con tu perfil académico (RN-03).')
+      setGuestBrowsing(false)
+      return
+    }
+    if (!filters.only_compatible && !user.has_complete_profile) {
+      alert('Para activar la búsqueda por compatibilidad primero debes completar tu perfil académico (RN-03).')
       return
     }
     setFilter('only_compatible', !filters.only_compatible)
@@ -1364,6 +1760,7 @@ function App() {
     try {
       await apiRequest('/auth/logout', { method: 'POST' })
       setUser(null)
+      setFilters(EMPTY_FILTERS)
     } catch {
       setSessionError('No fue posible cerrar la sesión.')
     }
@@ -1423,11 +1820,17 @@ function App() {
     )
   }
 
-  if (!user) {
+  if (!user && !guestBrowsing) {
     return (
       <AuthScreen
         onAuthenticated={(u) => {
           setUser(u)
+          setGuestBrowsing(false)
+          fetchPublications(EMPTY_FILTERS)
+        }}
+        onBrowseAsGuest={() => {
+          setGuestBrowsing(true)
+          setActiveView('inicio')
           fetchPublications(EMPTY_FILTERS)
         }}
       />
@@ -1451,54 +1854,70 @@ function App() {
           >
             Explorar
           </button>
-          <button
-            type="button"
-            className={activeView === 'publicar' ? 'nav-item active' : 'nav-item'}
-            onClick={() => {
-              setEditingPub(null)
-              setActiveView('publicar')
-            }}
-          >
-            Vender equipo
-          </button>
-          <button
-            type="button"
-            className={activeView === 'mis-publicaciones' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setActiveView('mis-publicaciones')}
-          >
-            Mis publicaciones
-          </button>
-          <button
-            type="button"
-            className={activeView === 'favoritos' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setActiveView('favoritos')}
-          >
-            Favoritos
-          </button>
-          <button
-            type="button"
-            className={activeView === 'perfil' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setActiveView('perfil')}
-          >
-            Mi perfil
-          </button>
+          {user && (
+            <>
+              <button
+                type="button"
+                className={activeView === 'publicar' ? 'nav-item active' : 'nav-item'}
+                onClick={() => {
+                  setEditingPub(null)
+                  setActiveView('publicar')
+                }}
+              >
+                Vender equipo
+              </button>
+              <button
+                type="button"
+                className={activeView === 'mis-publicaciones' ? 'nav-item active' : 'nav-item'}
+                onClick={() => setActiveView('mis-publicaciones')}
+              >
+                Mis publicaciones
+              </button>
+              <button
+                type="button"
+                className={activeView === 'favoritos' ? 'nav-item active' : 'nav-item'}
+                onClick={() => setActiveView('favoritos')}
+              >
+                Favoritos
+              </button>
+              <button
+                type="button"
+                className={activeView === 'perfil' ? 'nav-item active' : 'nav-item'}
+                onClick={() => setActiveView('perfil')}
+              >
+                Mi perfil
+              </button>
+            </>
+          )}
         </nav>
 
         <div className="navbar-user">
-          <span className="user-label">
-            {user.name.split(' ')[0]}
-            {user.es_institucional && <span className="verified-dot">✓</span>}
-          </span>
-          <button type="button" className="logout-btn" onClick={logout}>
-            Salir
-          </button>
+          {user ? (
+            <>
+              <span className="user-label">
+                {user.name.split(' ')[0]}
+                {user.es_institucional && <span className="verified-dot">✓</span>}
+              </span>
+              <button type="button" className="logout-btn" onClick={logout}>
+                Salir
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="primary-sm"
+              onClick={() => setGuestBrowsing(false)}
+            >
+              Iniciar sesión / Crear cuenta
+            </button>
+          )}
         </div>
       </header>
 
       {sessionError && <p className="form-error">{sessionError}</p>}
 
       <main className="main-content">
-        {/* VISTA 1: EXPLORAR / MARKETPLACE */}
+        {/* VISTA 1: EXPLORAR / CATÁLOGO PRINCIPAL (IU08) */}
         {activeView === 'inicio' && (
           <>
             <section className="hero-banner">
@@ -1514,6 +1933,10 @@ function App() {
                     type="button"
                     className="primary"
                     onClick={() => {
+                      if (!user) {
+                        setGuestBrowsing(false)
+                        return
+                      }
                       setEditingPub(null)
                       setActiveView('publicar')
                     }}
@@ -1526,41 +1949,51 @@ function App() {
                     onClick={toggleCompatibility}
                   >
                     {filters.only_compatible
-                      ? 'Mostrando: Solo compatibles'
-                      : 'Filtrar por compatibilidad de carrera'}
+                      ? 'Mostrando: Compatible con tu perfil'
+                      : 'Compatible con mi perfil académico'}
                   </button>
                 </div>
               </div>
 
               <div className="hero-widget">
-                <span className="widget-title">Tu perfil</span>
-                <p className="widget-career">{user.career || 'Comunidad General'}</p>
-                <span className="widget-meta">{user.semester || 'Sin semestre asignado'}</span>
+                <span className="widget-title">{user ? 'Tu perfil' : 'Modo Visitante'}</span>
+                <p className="widget-career">
+                  {user ? user.career || 'Comunidad General' : 'Sin sesión iniciada'}
+                </p>
+                <span className="widget-meta">
+                  {user ? user.semester || 'Sin semestre asignado' : 'Explora y filtra el catálogo'}
+                </span>
               </div>
             </section>
 
-            {/* BARRA DE FILTROS */}
+            {/* BARRA Y PANEL DE LOS 13 FILTROS TÉCNICOS (CU20, CU21) */}
             <section className="filter-bar panel">
               <div className="filter-row">
                 <div className="filter-group grow">
                   <input
                     type="search"
-                    placeholder="Buscar por marca, modelo o procesador…"
+                    placeholder="Buscar por marca, modelo, procesador o título…"
                     value={filters.search}
                     onChange={(e) => setFilter('search', e.target.value)}
                   />
                 </div>
 
                 <div className="filter-group">
-                  <select value={filters.device_type} onChange={(e) => setFilter('device_type', e.target.value)}>
-                    <option value="">Todos los tipos</option>
+                  <select
+                    value={filters.device_type}
+                    onChange={(e) => setFilter('device_type', e.target.value)}
+                  >
+                    <option value="">Todas las categorías</option>
                     <option value="Laptop">Laptops</option>
                     <option value="Tableta">Tabletas</option>
                   </select>
                 </div>
 
                 <div className="filter-group">
-                  <select value={filters.sort_by} onChange={(e) => setFilter('sort_by', e.target.value)}>
+                  <select
+                    value={filters.sort_by}
+                    onChange={(e) => setFilter('sort_by', e.target.value)}
+                  >
                     <option value="recientes">Más recientes</option>
                     <option value="precio_asc">Precio: menor a mayor</option>
                     <option value="precio_desc">Precio: mayor a menor</option>
@@ -1578,7 +2011,7 @@ function App() {
 
                 {activeFilterCount > 0 && (
                   <button type="button" className="link-clear-btn" onClick={resetFilters}>
-                    Limpiar
+                    Limpiar filtros
                   </button>
                 )}
               </div>
@@ -1587,7 +2020,10 @@ function App() {
                 <div className="advanced-filters">
                   <label>
                     Marca
-                    <select value={filters.brand} onChange={(e) => setFilter('brand', e.target.value)}>
+                    <select
+                      value={filters.brand}
+                      onChange={(e) => setFilter('brand', e.target.value)}
+                    >
                       <option value="">Todas</option>
                       {filterOptions.brands.map((b) => (
                         <option key={b} value={b}>
@@ -1598,21 +2034,27 @@ function App() {
                   </label>
 
                   <label>
-                    Condición
-                    <select value={filters.condition} onChange={(e) => setFilter('condition', e.target.value)}>
+                    Familia de CPU
+                    <select
+                      value={filters.processor_brand}
+                      onChange={(e) => setFilter('processor_brand', e.target.value)}
+                    >
                       <option value="">Cualquiera</option>
-                      <option value="Nuevo">Nuevo</option>
-                      <option value="Usado - Como nuevo">Como nuevo</option>
-                      <option value="Usado - Buen estado">Buen estado</option>
-                      <option value="Usado - Con detalles">Con detalles</option>
+                      <option value="Intel">Intel</option>
+                      <option value="AMD">AMD</option>
+                      <option value="Apple Silicon">Apple Silicon</option>
+                      <option value="Qualcomm">Qualcomm</option>
                     </select>
                   </label>
 
                   <label>
                     RAM mínima
-                    <select value={filters.min_ram} onChange={(e) => setFilter('min_ram', e.target.value)}>
+                    <select
+                      value={filters.min_ram}
+                      onChange={(e) => setFilter('min_ram', e.target.value)}
+                    >
                       <option value="">Cualquiera</option>
-                      {[4, 8, 12, 16, 24, 32].map((r) => (
+                      {[4, 8, 12, 16, 24, 32, 64].map((r) => (
                         <option key={r} value={r}>
                           {r} GB o más
                         </option>
@@ -1621,19 +2063,41 @@ function App() {
                   </label>
 
                   <label>
+                    Tipo de RAM
+                    <select
+                      value={filters.ram_type}
+                      onChange={(e) => setFilter('ram_type', e.target.value)}
+                    >
+                      <option value="">Cualquiera</option>
+                      <option value="DDR4">DDR4</option>
+                      <option value="DDR5">DDR5</option>
+                      <option value="LPDDR4X">LPDDR4X</option>
+                      <option value="LPDDR5">LPDDR5</option>
+                      <option value="Unificada">Unificada</option>
+                    </select>
+                  </label>
+
+                  <label>
                     Almacenamiento mínimo
-                    <select value={filters.min_storage} onChange={(e) => setFilter('min_storage', e.target.value)}>
+                    <select
+                      value={filters.min_storage}
+                      onChange={(e) => setFilter('min_storage', e.target.value)}
+                    >
                       <option value="">Cualquiera</option>
                       <option value="128">128 GB o más</option>
                       <option value="256">256 GB o más</option>
                       <option value="512">512 GB o más</option>
                       <option value="1024">1 TB o más</option>
+                      <option value="2048">2 TB o más</option>
                     </select>
                   </label>
 
                   <label>
-                    Tipo de disco
-                    <select value={filters.storage_type} onChange={(e) => setFilter('storage_type', e.target.value)}>
+                    Tipo de almacenamiento
+                    <select
+                      value={filters.storage_type}
+                      onChange={(e) => setFilter('storage_type', e.target.value)}
+                    >
                       <option value="">Cualquiera</option>
                       <option value="SSD NVMe">SSD NVMe</option>
                       <option value="SSD SATA">SSD SATA</option>
@@ -1643,11 +2107,28 @@ function App() {
                   </label>
 
                   <label>
-                    Tarjeta gráfica
-                    <select value={filters.gpu_type} onChange={(e) => setFilter('gpu_type', e.target.value)}>
+                    Tarjeta gráfica (GPU)
+                    <select
+                      value={filters.gpu_type}
+                      onChange={(e) => setFilter('gpu_type', e.target.value)}
+                    >
                       <option value="">Cualquiera</option>
                       <option value="dedicada">Dedicada</option>
                       <option value="integrada">Integrada</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Condición física
+                    <select
+                      value={filters.condition}
+                      onChange={(e) => setFilter('condition', e.target.value)}
+                    >
+                      <option value="">Cualquiera</option>
+                      <option value="Nuevo">Nuevo</option>
+                      <option value="Usado - Como nuevo">Como nuevo</option>
+                      <option value="Usado - Buen estado">Buen estado</option>
+                      <option value="Usado - Con detalles">Con detalles</option>
                     </select>
                   </label>
 
@@ -1681,7 +2162,7 @@ function App() {
                       checked={filters.ipn_sellers_only}
                       onChange={(e) => setFilter('ipn_sellers_only', e.target.checked)}
                     />
-                    Solo vendedores con correo IPN
+                    Solo ofertantes con insignia IPN
                   </label>
                 </div>
               )}
@@ -1692,22 +2173,27 @@ function App() {
               <div className="catalog-header">
                 <h3>
                   {publications.length} {publications.length === 1 ? 'oferta' : 'ofertas'} disponibles
-                  {filters.only_compatible && ' · Compatibilidad con tu carrera'}
+                  {filters.only_compatible &&
+                    ' · Mostrando publicaciones compatibles con tu perfil académico'}
                 </h3>
                 {loadingPubs && <span className="updating-tag">Actualizando…</span>}
               </div>
 
               {publications.length === 0 ? (
                 <div className="empty-box">
-                  <p>No se encontraron publicaciones con los filtros aplicados.</p>
+                  <p>No se encontraron publicaciones activas con los filtros seleccionados.</p>
                   <button className="secondary" onClick={resetFilters}>
-                    Ver todas las ofertas
+                    Limpiar filtros
                   </button>
                 </div>
               ) : (
                 <div className="catalog-grid">
                   {publications.map((pub) => (
-                    <article key={pub.id} className="card-item" onClick={() => setSelectedPub(pub)}>
+                    <article
+                      key={pub.id}
+                      className="card-item"
+                      onClick={() => setSelectedPub(pub)}
+                    >
                       <div className="card-media">
                         <img
                           src={
@@ -1719,29 +2205,33 @@ function App() {
                           loading="lazy"
                         />
                         <span className="card-tag-device">{pub.device_type}</span>
-                        {pub.compatibility_score && (
+                        {user && pub.compatibility_score && (
                           <span
                             className={`card-tag-score ${
                               pub.compatibility_score >= 90 ? 'high' : ''
                             }`}
                           >
-                            {pub.compatibility_score}% match
+                            {pub.compatibility_score}% compatible
                           </span>
                         )}
                       </div>
 
                       <div className="card-body">
-                        <span className="card-brand">{pub.brand} · {pub.model}</span>
+                        <span className="card-brand">
+                          {pub.brand} · {pub.model}
+                        </span>
                         <h4 className="card-title">{pub.title}</h4>
 
-                        {pub.compatibility_badge && (
+                        {user && pub.compatibility_badge && (
                           <p className="card-compat-hint">{pub.compatibility_badge}</p>
                         )}
 
                         <div className="specs-chips">
                           <span>{pub.processor}</span>
                           <span>{pub.ram_gb} GB</span>
-                          <span>{pub.storage_gb} GB {pub.storage_type}</span>
+                          <span>
+                            {pub.storage_gb} GB {pub.storage_type}
+                          </span>
                         </div>
 
                         <div className="card-bottom">
@@ -1767,7 +2257,7 @@ function App() {
         )}
 
         {/* VISTA 2: PUBLICAR / EDITAR OFERTA */}
-        {activeView === 'publicar' && (
+        {activeView === 'publicar' && user && (
           <CreatePublicationView
             key={editingPub ? `edit-${editingPub.id}` : 'create-new'}
             initialData={editingPub}
@@ -1785,7 +2275,7 @@ function App() {
         )}
 
         {/* VISTA 3: MIS PUBLICACIONES */}
-        {activeView === 'mis-publicaciones' && (
+        {activeView === 'mis-publicaciones' && user && (
           <MyPublicationsView
             onSelectPub={(pub) => setSelectedPub(pub)}
             onCreateNew={() => {
@@ -1794,11 +2284,12 @@ function App() {
             }}
             onEditPub={startEditingPub}
             onDeletePub={handleDeletePub}
+            onStatusChange={handleStatusChange}
           />
         )}
 
         {/* VISTA 4: FAVORITOS */}
-        {activeView === 'favoritos' && (
+        {activeView === 'favoritos' && user && (
           <FavoritesView
             onSelectPub={(pub) => setSelectedPub(pub)}
             onRemoveFav={handleToggleFavorite}
@@ -1806,7 +2297,7 @@ function App() {
         )}
 
         {/* VISTA 5: MI PERFIL */}
-        {activeView === 'perfil' && (
+        {activeView === 'perfil' && user && (
           <ProfileView user={user} onProfileUpdated={(updated) => setUser(updated)} />
         )}
       </main>
@@ -1822,6 +2313,10 @@ function App() {
           onEdit={startEditingPub}
           onDelete={handleDeletePub}
           onToggleFavorite={handleToggleFavorite}
+          onRequireLogin={() => {
+            setSelectedPub(null)
+            setGuestBrowsing(false)
+          }}
         />
       )}
     </div>

@@ -17,11 +17,11 @@ Aplicación web que centraliza la publicación de laptops y tabletas, nuevas o d
 
 | Módulo | Qué incluye |
 | :--- | :--- |
-| **Cuentas** | Registro con rol (Alumno, Docente, PAAE, Externo), carrera, semestre e intereses; inicio y cierre de sesión con cookie `HttpOnly`; confirmación de correo con insignia IPN; perfil académico editable y restablecible. |
-| **Publicaciones** | Alta con ficha técnica y validaciones; detección de duplicados que suma existencias; edición; cambio de estado (Activa, Vendida, Obsoleta); eliminación; sección *Mis publicaciones*. |
-| **Marketplace** | Catálogo con tarjetas, ficha técnica en ventana modal, contacto del vendedor por teléfono o WhatsApp bajo demanda, favoritos. |
-| **Filtros** | 13 filtros combinables (texto, tipo, marca, condición, RAM, almacenamiento, tipo de disco, GPU, rango de precio, vendedor IPN, compatibilidad con la carrera y ordenamiento). |
-| **Compatibilidad (CBF)** | Puntaje de 0 a 100 % y etiqueta explicativa según carrera y especificaciones del equipo. |
+| **Cuentas y sesión** | Registro con rol (Alumno, Docente, PAAE, Externo), carrera, semestre, unidades de aprendizaje e intereses; inicio y cierre de sesión con cookie `HttpOnly`; confirmación de correo con insignia IPN; recuperación y restablecimiento de contraseña por código SHA-256; perfil académico editable; exploración como Visitante. |
+| **Publicaciones** | Alta con ficha técnica obligatoria y validaciones; detección de duplicados mediante huella SHA-256 que suma existencias; edición; cambio de estado (`Activa`, `Vendida`, `Obsoleta`); caducidad automática a 30 días; eliminación; sección *Mis publicaciones* con filtro por estado. |
+| **Marketplace** | Catálogo con tarjetas, ficha técnica en ventana modal, contacto del vendedor por teléfono o WhatsApp bajo demanda, favoritos sincronizados en vivo (con aviso cuando una oferta se retira). |
+| **Filtros** | 13 filtros técnicos combinables (texto, categoría, marca, condición, familia de CPU, RAM mínima, tipo de RAM, almacenamiento mínimo, tipo de disco, GPU dedicada/integrada, rango de precio, insignia IPN y compatibilidad CBF). |
+| **Compatibilidad (CBF)** | Puntaje de 0 a 100 % y etiqueta explicativa según carrera, unidades/intereses y especificaciones del equipo sobre el esquema relacional de 13 entidades en PostgreSQL. |
 
 El detalle de cada caso de uso, regla de negocio y endpoint está en la [documentación](#documentación).
 

@@ -120,6 +120,8 @@ Base: `http://localhost:8000`. Los errores devuelven `{"detail": "mensaje"}`. La
 | `POST /auth/register` | `name`, `email`, `password` (8-128), `role` (por defecto `Alumno`), `career`, `semester`, `interests`, `phone` | **201** `UserResponse` + cookie. **409** correo duplicado. **422** datos inválidos. |
 | `POST /auth/verify-email?token=` | `token` | **200** `UserResponse` verificado. **400** token inválido. |
 | `POST /auth/login` | `email`, `password` | **200** `UserResponse` + cookie. **401** credenciales incorrectas. |
+| `POST /auth/forgot-password` | `email` | **200** respuesta uniforme y código de recuperación con vigencia de 24 h (CU05, RN-13). |
+| `POST /auth/reset-password` | `token`, `new_password` | **200** actualiza hash `scrypt` y revoca sesiones activas (CU06). |
 | `GET /auth/me` | — | **200** `UserResponse`. |
 | `PUT /auth/profile` | `career`, `semester`, `interests`, `phone` (todos opcionales) | **200** `UserResponse`. |
 | `DELETE /auth/profile` | — | **200** `UserResponse` con carrera, semestre e intereses en `null`. |

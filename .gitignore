@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 __pycache__/
 *.pyc
 .env
@@ -11,3 +11,11 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+.github/agents/
+docs/NUEVO/
+docs/UNIFICAR/
+docs/Repositorio_Marco_Teorico/
+docs/PROTOCOLO_*.pdf
+docs/Reporte_Tecnico_*.docx
+scripts/verificar_pruebas_tt1.py
+

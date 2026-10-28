@@ -307,6 +307,8 @@ Documentación interactiva: `http://localhost:8000/docs`.
 | `POST` | `/auth/register` | Crea la cuenta y abre sesión | No |
 | `POST` | `/auth/verify-email?token=` | Confirma el correo | No |
 | `POST` | `/auth/login` | Inicia sesión | No |
+| `POST` | `/auth/forgot-password` | Solicita código de restablecimiento de contraseña | No |
+| `POST` | `/auth/reset-password` | Restablece la contraseña y revoca sesiones | No |
 | `GET` | `/auth/me` | Usuario de la sesión actual | Sí |
 | `PUT` | `/auth/profile` | Actualiza carrera, semestre, intereses o teléfono | Sí |
 | `DELETE` | `/auth/profile` | Restablece carrera, semestre e intereses | Sí |
